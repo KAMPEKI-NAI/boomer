@@ -1,4 +1,4 @@
-import { v2 as cloudinary } from "cloudinary";
+import { v2 as cloudinary } from "cloudinary";// backend/src/config/cloudinary.js
 import { ENV } from "./env.js";
 
 cloudinary.config({

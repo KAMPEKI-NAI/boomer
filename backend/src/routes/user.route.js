@@ -13,6 +13,6 @@ router.post("/me", protectRoute, updateProfile);
 router.put("/profile", protectRoute, updateProfile);
 router.post("/follow/:targerUserId", protectRoute, followUser);
 
-//Updating the profile authentication
+//Upd
 
 export default router;
