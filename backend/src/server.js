@@ -42,3 +42,5 @@ app.use("/api/notifications", notificationRoutes);
 };
 
 startServer();
+
+export default app;
