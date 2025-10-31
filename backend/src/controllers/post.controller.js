@@ -74,7 +74,7 @@ export const createPost = asyncHandler(async (req, res) => {
 
   let imageUrl = "";
 
-  // upload image to Cloudinary if provided
+  // upload image to Cloudinary if provided by user
   if (imageFile) {
     try {
       // convert buffer to base64 for cloudinary
