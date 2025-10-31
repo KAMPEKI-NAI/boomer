@@ -3,6 +3,7 @@ import cors from "cors";
 import {clerkMiddleware} from "@clerk/express";
 
 import userRoutes from "./routes/user.route.js";
+import postRoutes from "./routes/post.route.js";
 
 
 import { ENV } from "./config/env.js";
