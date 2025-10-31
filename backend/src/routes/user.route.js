@@ -19,5 +19,5 @@ router.get("/me", protectRoute, getCurrentUser);
 router.put("/profile", protectRoute, updateProfile);
 router.post("/follow/:targetUserId", protectRoute, followUser);
 
-export default router;
+
 export default router;
