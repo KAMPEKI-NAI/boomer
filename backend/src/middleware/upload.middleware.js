@@ -1,3 +1,4 @@
+
 import multer from "multer"; // Middleware for handling multipart/form-data, primarily used for uploading files
 
 const storage = multer.memoryStorage();
@@ -17,5 +18,4 @@ const upload = multer({
 });
 
 export default upload;
-
 
