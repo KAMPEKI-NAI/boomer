@@ -1,4 +1,4 @@
-import express from "express";
+import express from "express";// backend/src/routes/post.route.js
 import { createPost, getPost, getPosts, getUserPosts } from "../controllers/post.controller.js";
 import { protectRoute } from "../middleware/auth.middleware.js";
 import upload from "../middleware/upload.middleware.js";
