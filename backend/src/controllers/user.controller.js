@@ -2,8 +2,6 @@ import asyncHandler from "express-async-handler";
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-
-
 const User = require('../models/user.model.js');
 const Notification = require('../models/notification.model.js');
 
