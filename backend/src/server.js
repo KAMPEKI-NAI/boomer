@@ -10,7 +10,7 @@ import notificationRoutes from "./routes/notification.route.js";
 
 import { ENV } from "./config/env.js";
 import { connectDB } from "./config/db.js";
-const express = require('express');
+
 const app = express();
 
 const cors = require('cors');
