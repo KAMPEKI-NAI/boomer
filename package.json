@@ -2,6 +2,7 @@
   "dependencies": {
     "cloudinary": "^2.0.0",
     "cors": "^2.8.5",
+    "expo-image-picker": "^17.0.8",
     "express-async-handler": "^1.2.0",
     "multer": "^2.0.2",
     "nativewind": "^4.2.1",
