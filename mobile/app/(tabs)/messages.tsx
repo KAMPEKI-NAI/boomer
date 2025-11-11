@@ -11,10 +11,9 @@ import {
   Image,
   Modal,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const MessagesScreen = () => {
-  const insets = useSafeAreaInsets();
   const [searchText, setSearchText] = useState("");
   const [conversationsList, setConversationsList] = useState(CONVERSATIONS);
   const [selectedConversation, setSelectedConversation] = useState<ConversationType | null>(null);
@@ -91,7 +90,7 @@ const MessagesScreen = () => {
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 + insets.bottom }}
+        contentContainerStyle={{ paddingBottom: 100 }}
       >
         {conversationsList.map((conversation) => (
           <TouchableOpacity

@@ -1,69 +1,22 @@
-import { Redirect, Tabs } from "expo-router";
-import { Feather } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAuth } from "@clerk/clerk-expo";
+import { ClerkProvider } from "@clerk/clerk-expo";
+import { tokenCache } from "@clerk/clerk-expo/token-cache";
+import { Stack } from "expo-router";
+// import "../global.css"; // Removed because CSS imports are not supported in React Native/Expo
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { StatusBar } from "expo-status-bar";
 
-const TabsLayout = () => {
-  const insets = useSafeAreaInsets();
+const queryClient = new QueryClient();
 
-  const { isSignedIn } = useAuth();
-
-  if (!isSignedIn) return <Redirect href="/(auth)" />;
-
+export default function RootLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: "#1DA1F2",
-        tabBarInactiveTintColor: "#657786",
-        tabBarStyle: {
-          backgroundColor: "#fff",
-          borderTopWidth: 1,
-          borderTopColor: "#E1E8ED",
-          height: 50 + insets.bottom,
-          paddingTop: 8,
-        },
-        headerShown: false,
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "",
-          tabBarIcon: ({ color, size }) => <Feather name="home" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="search"
-        options={{
-          title: "",
-
-          tabBarIcon: ({ color, size }) => <Feather name="search" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="notifications"
-        options={{
-          title: "",
-
-          tabBarIcon: ({ color, size }) => <Feather name="bell" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="messages"
-        options={{
-          title: "",
-
-          tabBarIcon: ({ color, size }) => <Feather name="mail" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "",
-          tabBarIcon: ({ color, size }) => <Feather name="user" size={size} color={color} />,
-        }}
-      />
-    </Tabs>
+    <ClerkProvider tokenCache={tokenCache}>
+      <QueryClientProvider client={queryClient}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+        </Stack>
+        <StatusBar style="dark" />
+      </QueryClientProvider>
+    </ClerkProvider>
   );
-};
-export default TabsLayout;
+}
