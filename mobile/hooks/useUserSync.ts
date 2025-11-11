@@ -19,7 +19,7 @@ export const useUserSync = () => {
     if (isSignedIn && !syncUserMutation.data) {
       syncUserMutation.mutate();
     }
-  }, [isSignedIn]);
+  }, [isSignedIn, syncUserMutation]);
 
   return null;
 };
