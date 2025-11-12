@@ -1,155 +1,134 @@
-import EditProfileModal from "@/components/EditProfileModal";
-import PostsList from "@/components/PostsList";
-import SignOutButton from "@/components/SignOutButton";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { usePosts } from "@/hooks/usePosts";
-import { useProfile } from "@/hooks/useProfile";
-import { Feather } from "@expo/vector-icons";
-import { format } from "date-fns";
-import {
-  View,
-  Text,
-  ActivityIndicator,
-  ScrollView,
-  Image,
-  TouchableOpacity,
-  RefreshControl,
-} from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+// import React from 'react';
+// import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+// import { useUser, useClerk } from '@clerk/clerk-expo';
+// import { Stack } from 'expo-router';
 
-const ProfileScreens = () => {
-  const { currentUser, isLoading } = useCurrentUser();
-  const insets = useSafeAreaInsets();
+// export default function ProfileScreen() {
+//   // We use the useUser hook to access authentication state
+//   const { isLoaded, user } = useUser();
+//   const { signOut } = useClerk();
 
-  const {
-    posts: userPosts,
-    refetch: refetchPosts,
-    isLoading: isRefetching,
-  } = usePosts(currentUser?.username);
+//   // 1. Handle Loading State: If data isn't loaded yet, show spinner.
+//   if (!isLoaded) {
+//     return (
+//       <View style={styles.container}>
+//         <Stack.Screen options={{ title: 'Loading' }} />
+//         <ActivityIndicator size="large" color="#007aff" />
+//         <Text style={styles.loadingText}>Loading user data...</Text>
+//       </View>
+//     );
+//   }
 
-  const {
-    isEditModalVisible,
-    openEditModal,
-    closeEditModal,
-    formData,
-    saveProfile,
-    updateFormField,
-    isUpdating,
-    refetch: refetchProfile,
-  } = useProfile();
+//   // 2. Handle Error / Signed Out State: If loaded, but the user object is missing.
+//   // This explicitly catches the case where the 403 failure leaves 'user' as null/undefined.
+//   if (!user) {
+//     return (
+//       <View style={styles.container}>
+//         <Stack.Screen options={{ title: 'Error' }} />
+//         <Text style={styles.errorText}>❌ Authentication Sync Failed (403)</Text>
+//         <Text style={styles.errorSubtitle}>
+//           The server rejected the connection. Check your Clerk Allowed Hostnames/Origins setting.
+//         </Text>
+//       </View>
+//     );
+//   }
+  
+//   // 3. Handle Signed In State (Only reached if 'user' is guaranteed to be defined)
+//   // Accessing user properties is now safe.
+//   return (
+//     <View style={styles.container}>
+//       <Stack.Screen options={{ title: 'User Profile' }} />
+//       <Text style={styles.title}>Welcome, {user.firstName || user.username || 'User'}!</Text>
+      
+//       <View style={styles.infoContainer}>
+//         <Text style={styles.label}>Full Name:</Text>
+//         <Text style={styles.value}>{user.fullName || 'N/A'}</Text>
+//         <Text style={styles.label}>Primary Email:</Text>
+//         <Text style={styles.value}>
+//           {user.primaryEmailAddress?.emailAddress || 'N/A'}
+//         </Text>
+//         <Text style={styles.label}>User ID:</Text>
+//         <Text style={styles.value}>{user.id}</Text>
+//       </View>
 
-  if (isLoading) {
-    return (
-      <View className="flex-1 bg-white items-center justify-center">
-        <ActivityIndicator size="large" color="#1DA1F2" />
-      </View>
-    );
-  }
+//       <TouchableOpacity 
+//         onPress={() => signOut()} 
+//         style={styles.signOutButton}
+//       >
+//         <Text style={styles.signOutText}>Sign Out</Text>
+//       </TouchableOpacity>
+//     </View>
+//   );
+// }
 
-  return (
-    <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      {/* Header */}
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100">
-        <View>
-          <Text className="text-xl font-bold text-gray-900">
-            {currentUser.firstName} {currentUser.lastName}
-          </Text>
-          <Text className="text-gray-500 text-sm">{userPosts.length} Posts</Text>
-        </View>
-        <SignOutButton />
-      </View>
-
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingBottom: 100 + insets.bottom }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={() => {
-              refetchProfile();
-              refetchPosts();
-            }}
-            tintColor="#1DA1F2"
-          />
-        }
-      >
-        <Image
-          source={{
-            uri:
-              currentUser.bannerImage ||
-              "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=400&fit=crop",
-          }}
-          className="w-full h-48"
-          resizeMode="cover"
-        />
-
-        <View className="px-4 pb-4 border-b border-gray-100">
-          <View className="flex-row justify-between items-end -mt-16 mb-4">
-            <Image
-              source={{ uri: currentUser.profilePicture }}
-              className="w-32 h-32 rounded-full border-4 border-white"
-            />
-            <TouchableOpacity
-              className="border border-gray-300 px-6 py-2 rounded-full"
-              onPress={openEditModal}
-            >
-              <Text className="font-semibold text-gray-900">Edit profile</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View className="mb-4">
-            <View className="flex-row items-center mb-1">
-              <Text className="text-xl font-bold text-gray-900 mr-1">
-                {currentUser.firstName} {currentUser.lastName}
-              </Text>
-              <Feather name="check-circle" size={20} color="#1DA1F2" />
-            </View>
-            <Text className="text-gray-500 mb-2">@{currentUser.username}</Text>
-            <Text className="text-gray-900 mb-3">{currentUser.bio}</Text>
-
-            <View className="flex-row items-center mb-2">
-              <Feather name="map-pin" size={16} color="#657786" />
-              <Text className="text-gray-500 ml-2">{currentUser.location}</Text>
-            </View>
-
-            <View className="flex-row items-center mb-3">
-              <Feather name="calendar" size={16} color="#657786" />
-              <Text className="text-gray-500 ml-2">
-                Joined {format(new Date(currentUser.createdAt), "MMMM yyyy")}
-              </Text>
-            </View>
-
-            <View className="flex-row">
-              <TouchableOpacity className="mr-6">
-                <Text className="text-gray-900">
-                  <Text className="font-bold">{currentUser.following?.length}</Text>
-                  <Text className="text-gray-500"> Following</Text>
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity>
-                <Text className="text-gray-900">
-                  <Text className="font-bold">{currentUser.followers?.length}</Text>
-                  <Text className="text-gray-500"> Followers</Text>
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        <PostsList username={currentUser?.username} />
-      </ScrollView>
-
-      <EditProfileModal
-        isVisible={isEditModalVisible}
-        onClose={closeEditModal}
-        formData={formData}
-        saveProfile={saveProfile}
-        updateFormField={updateFormField}
-        isUpdating={isUpdating}
-      />
-    </SafeAreaView>
-  );
-};
-
-export default ProfileScreens;
+// const styles = StyleSheet.create({
+//   container: {
+//     flex: 1,
+//     padding: 24,
+//     backgroundColor: '#f8f8f8',
+//     alignItems: 'center',
+//     justifyContent: 'center',
+//   },
+//   title: {
+//     fontSize: 28,
+//     fontWeight: 'bold',
+//     marginBottom: 30,
+//     color: '#333',
+//   },
+//   infoContainer: {
+//     width: '90%',
+//     padding: 20,
+//     backgroundColor: '#fff',
+//     borderRadius: 12,
+//     shadowColor: '#000',
+//     shadowOffset: { width: 0, height: 2 },
+//     shadowOpacity: 0.1,
+//     shadowRadius: 4,
+//     elevation: 3,
+//     marginBottom: 30,
+//   },
+//   label: {
+//     fontSize: 16,
+//     fontWeight: '600',
+//     color: '#555',
+//     marginTop: 10,
+//   },
+//   value: {
+//     fontSize: 18,
+//     color: '#000',
+//     marginBottom: 5,
+//   },
+//   loadingText: {
+//     marginTop: 15,
+//     fontSize: 16,
+//     color: '#555',
+//   },
+//   errorText: {
+//     fontSize: 20,
+//     fontWeight: 'bold',
+//     color: '#d9534f',
+//     textAlign: 'center',
+//     marginBottom: 10,
+//   },
+//   errorSubtitle: {
+//     fontSize: 16,
+//     color: '#777',
+//     textAlign: 'center',
+//   },
+//   signOutButton: {
+//     backgroundColor: '#007aff',
+//     paddingVertical: 12,
+//     paddingHorizontal: 30,
+//     borderRadius: 8,
+//     shadowColor: '#000',
+//     shadowOffset: { width: 0, height: 2 },
+//     shadowOpacity: 0.2,
+//     shadowRadius: 3,
+//     elevation: 5,
+//   },
+//   signOutText: {
+//     fontSize: 18,
+//     fontWeight: 'bold',
+//     color: '#fff',
+//   }
+// });
