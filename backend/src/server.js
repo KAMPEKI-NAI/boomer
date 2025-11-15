@@ -11,10 +11,6 @@ import { ENV } from "./config/env.js";
 import { connectDB } from "./config/db.js";
 import { arcjetMiddleware } from "./middleware/arcjet.middleware.js";
 
-import { ClerkExpressRequireAuth, requireAuth } from "@clerk/express";
-
-
-
 const app = express();
 
 app.use(cors());
@@ -22,10 +18,6 @@ app.use(express.json());
 
 app.use(clerkMiddleware());
 app.use(arcjetMiddleware);
-
-app.use(ClerkExpressWithAuth());
-ClerkExpressWithAuth({ jwtKey: "mobile" });
-
 
 app.get("/", (req, res) => res.send("Hello from server"));
 
