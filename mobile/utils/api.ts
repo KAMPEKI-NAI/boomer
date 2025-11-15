@@ -6,13 +6,11 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "https://boomer-two.verc
 // const API_BASE_URL = "http://localhost:5001/api";
 
 // this will basically create an authenticated api, pass the token into our headers
-export const createApiClient = (getToken: any): AxiosInstance => {
-  const api = axios.create({
-    baseURL: API_BASE_URL,
-  });
+export const createApiClient = (getToken: () => Promise<string | null>): AxiosInstance => {
+  const api = axios.create({ baseURL: API_BASE_URL });
 
   api.interceptors.request.use(async (config) => {
-    const token = await getToken({ template: "mobile" }); // 👈 USE TEMPLATE
+    const token = await getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
