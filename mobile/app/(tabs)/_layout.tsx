@@ -6,14 +6,9 @@ import { useAuth } from "@clerk/clerk-expo";
 const TabsLayout = () => {
   const insets = useSafeAreaInsets();
 
-  const { isSignedIn, isLoaded } = useAuth(); // Added isLoaded check
+  const { isSignedIn } = useAuth();
 
-  if (!isLoaded) {
-    return null; // Show loading while Clerk determines status
-  }
-
-  // 🛑 CRITICAL FIX: Redirect to a specific, stable screen in the auth group
-  if (!isSignedIn) return <Redirect href="/(auth)" />; 
+  if (!isSignedIn) return <Redirect href="/(auth)" />;
 
   return (
     <Tabs
@@ -41,6 +36,7 @@ const TabsLayout = () => {
         name="search"
         options={{
           title: "",
+
           tabBarIcon: ({ color, size }) => <Feather name="search" size={size} color={color} />,
         }}
       />
@@ -48,6 +44,7 @@ const TabsLayout = () => {
         name="notifications"
         options={{
           title: "",
+
           tabBarIcon: ({ color, size }) => <Feather name="bell" size={size} color={color} />,
         }}
       />
@@ -55,6 +52,7 @@ const TabsLayout = () => {
         name="messages"
         options={{
           title: "",
+
           tabBarIcon: ({ color, size }) => <Feather name="mail" size={size} color={color} />,
         }}
       />

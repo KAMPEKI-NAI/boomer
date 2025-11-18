@@ -1,6 +1,15 @@
-export const protectRoute = async (req, res, next) => {
-    if (!req.auth().isAuthenticated){
-        return res.status(401).json({message: "Unauthorized - you must be logged in"});
-    }
-    next();
-}
+import { getAuth } from "@clerk/express";
+
+export const protectRoute = (req, res, next) => {
+  const auth = getAuth(req);
+
+  console.log("🔐 AUTH DEBUG:", auth);
+
+  if (!auth.userId) {
+    console.log("❌ BLOCKED REQUEST — MISSING auth.userId");
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  req.userId = auth.userId;
+  next();
+};
