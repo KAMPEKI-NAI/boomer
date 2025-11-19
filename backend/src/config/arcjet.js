@@ -15,7 +15,8 @@ const PORT = 3000;
 /**
  * Initializes Arcjet with security rules:
  * 1. Shield: Blocks common web attacks (SQLi, XSS).
- * 2. DetectBot: Blocks most bots, allowing only Search Engines and specific user agents (JAVA_OKHTTP).
+ * 2. DetectBot: Blocks most bots, allowing only Search Engines, specific user agents (JAVA_OKHTTP),
+ * and critically, Vercel's internal monitoring/screenshot bot.
  * 3. TokenBucket: Rate limits to 10 requests per 10 seconds (1 req/sec average, 15 req burst capacity).
  */
 export const aj = arcjet({
@@ -31,7 +32,9 @@ export const aj = arcjet({
       mode: "LIVE",
       allow: [
         "CATEGORY:SEARCH_ENGINE",
-        "JAVA_OKHTTP"
+        "JAVA_OKHTTP",
+        // --- FIX: Allow Vercel's internal monitor/screenshot bot ---
+        "VERCEL_MONITOR_PREVIEW",
       ],
     }),
 
@@ -55,7 +58,8 @@ const app = express();
 const arcjetMiddleware = async (req, res, next) => {
   // 1. Extract necessary data from the request to pass to Arcjet
   // Note: For a real server, ensure you are getting the true client IP from proxy headers (e.g., 'x-forwarded-for')
-  const clientIp = req.ip || '127.0.0.1';
+  // We are now explicitly looking at the x-forwarded-for header provided in your log for better accuracy.
+  const clientIp = req.get('x-forwarded-for')?.split(',')[0] || req.ip || '127.0.0.1';
   const userAgent = req.get('User-Agent') || '';
 
   console.log(`\nIncoming Request: IP=${clientIp}, User-Agent="${userAgent}"`);
