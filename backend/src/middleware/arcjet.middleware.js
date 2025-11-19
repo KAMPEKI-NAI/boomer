@@ -1,45 +1,31 @@
-import { aj } from "../config/arcjet.js";
+import arcjet, { detectBot } from "@arcjet/node";
 
-// Arcjet middleware for rate limiting, bot protection, and security
+const aj = arcjet({
+  key: process.env.ARCJET_KEY,
+  rules: [
+    detectBot({
+      mode: "LIVE",
+      allow: ["CATEGORY:SEARCH_ENGINE"],
+    }),
+  ],
+});
 
 export const arcjetMiddleware = async (req, res, next) => {
   try {
-    const decision = await aj.protect(req, {
-      requested: 1, // each request consumes 1 token
-    });
+    const decision = await aj.protect(req);
 
-    // handle denied requests
+    console.log("Arcjet decision:", decision.reason);
+
     if (decision.isDenied()) {
-      if (decision.reason.isRateLimit()) {
-        return res.status(429).json({
-          error: "Too Many Requests",
-          message: "Rate limit exceeded. Please try again later.",
-        });
-      } else if (decision.reason.isBot()) {
-        return res.status(403).json({
-          error: "Bot access denied",
-          message: "Automated requests are not allowed.",
-        });
-      } else {
-        return res.status(403).json({
-          error: "Forbidden",
-          message: "Access denied by security policy.",
-        });
-      }
-    }
-
-    // check for spoofed bots
-    if (decision.results.some((result) => result.reason.isBot() && result.reason.isSpoofed())) {
       return res.status(403).json({
-        error: "Spoofed bot detected",
-        message: "Malicious bot activity detected.",
+        error: "Blocked by Arcjet",
+        reason: decision.reason,
       });
     }
 
     next();
-  } catch (error) {
-    console.error("Arcjet middleware error:", error);
-    // allow request to continue if Arcjet fails
-    next();
+  } catch (err) {
+    console.error("Arcjet error:", err);
+    next(); // do not block if Arcjet fails
   }
 };
