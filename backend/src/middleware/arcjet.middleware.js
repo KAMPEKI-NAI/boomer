@@ -5,7 +5,8 @@ const aj = arcjet({
   rules: [
     detectBot({
       mode: "LIVE",
-      allow: ["CATEGORY:SEARCH_ENGINE"],
+      allow: ["CATEGORY:SEARCH_ENGINE", 
+        "JAVA_OKHTTP"],
     }),
   ],
 });
