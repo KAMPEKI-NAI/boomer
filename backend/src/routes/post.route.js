@@ -1,4 +1,5 @@
 import express from "express";
+import { searchPosts } from "../controllers/post.controller.js";
 import {
   createPost,
   deletePost,
@@ -16,6 +17,7 @@ const router = express.Router();
 router.get("/", getPosts);
 router.get("/:postId", getPost);
 router.get("/user/:username", getUserPosts);
+router.get("/", searchPosts);
 
 // protected proteced
 router.post("/", protectRoute, upload.single("image"), createPost);

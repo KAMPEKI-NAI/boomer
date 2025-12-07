@@ -1,4 +1,5 @@
 import express from "express";
+import { searchUsers } from "../controllers/user.controller.js";
 import {
   followUser,
   getCurrentUser,
@@ -12,6 +13,8 @@ const router = express.Router();
 
 // public route
 router.get("/profile/:username", getUserProfile);
+
+router.get("/search", searchUsers);
 
 // protected routes
 router.post("/sync", protectRoute, syncUser);

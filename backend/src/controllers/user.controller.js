@@ -100,3 +100,75 @@ export const followUser = asyncHandler(async (req, res) => {
     message: isFollowing ? "User unfollowed successfully" : "User followed successfully",
   });
 });
+
+
+export const searchUsers = async (req, res) => {
+  try {
+    const query = req.query.q || "";
+
+    if (!query.trim()) {
+      return res.json([]);
+    }
+
+    const results = await User.aggregate([
+      {
+        $search: {
+          index: "h-search",
+          compound: {
+            should: [
+              {
+                autocomplete: {
+                  query,
+                  path: "firstName",
+                  fuzzy: {
+                    maxEdits: 2,
+                    prefixLength: 0,
+                    maxExpansions: 50
+                  }
+                }
+              },
+              {
+                autocomplete: {
+                  query,
+                  path: "lastName",
+                  fuzzy: {
+                    maxEdits: 2,
+                    prefixLength: 0,
+                    maxExpansions: 50
+                  }
+                }
+              },
+              {
+                autocomplete: {
+                  query,
+                  path: "username",
+                  fuzzy: {
+                    maxEdits: 2,
+                    prefixLength: 0,
+                    maxExpansions: 50
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      { $limit: 20 },
+      {
+        $project: {
+          _id: 1,
+          username: 1,
+          firstName: 1,
+          lastName: 1,
+          profilePicture: 1,
+          email: 1
+        }
+      }
+    ]);
+
+    res.json(results);
+  } catch (err) {
+    console.error("Search error:", err);
+    res.status(500).json({ error: "Search failed" });
+  }
+};

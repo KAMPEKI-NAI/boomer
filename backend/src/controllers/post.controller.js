@@ -166,3 +166,70 @@ export const deletePost = asyncHandler(async (req, res) => {
 
   res.status(200).json({ message: "Post deleted successfully" });
 });
+
+export const searchPosts = async (req, res) => {
+  try {
+    const query = req.query.q || "";
+
+    if (!query.trim()) {
+      return res.json([]);
+    }
+
+    const results = await Post.aggregate([
+      {
+        $search: {
+          index: "post-search",
+          compound: {
+            should: [
+              // Autocomplete on post text
+              {
+                autocomplete: {
+                  query,
+                  path: "text",
+                  fuzzy: {
+                    maxEdits: 1,
+                    prefixLength: 0
+                  }
+                }
+              },
+
+              // Tag search (#Nigeria, #Tech)
+              {
+                text: {
+                  query,
+                  path: "tags"
+                }
+              },
+
+              // Search inside author's username
+              {
+                autocomplete: {
+                  query,
+                  path: "authorUsername",
+                  fuzzy: {
+                    maxEdits: 1,
+                    prefixLength: 0
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      { $limit: 25 },
+      {
+        $project: {
+          text: 1,
+          tags: 1,
+          authorUsername: 1,
+          createdAt: 1
+        }
+      }
+    ]);
+
+    return res.json(results);
+  } catch (error) {
+    console.error("Post search error:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
