@@ -1,5 +1,5 @@
-import User from "../models/User.js";
-import Post from "../models/Post.js";
+import User from "../Models/user.model.js";
+import Post from "../Models/post.model.js";
 
 export const search = async (req, res) => {
   const { q } = req.query;
