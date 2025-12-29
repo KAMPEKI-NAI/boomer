@@ -88,6 +88,7 @@ export const followUser = asyncHandler(async (req, res) => {
       $push: { followers: currentUser._id },
     });
 
+    
     // create notification
     await Notification.create({
       from: currentUser._id,
@@ -106,47 +107,30 @@ export const searchUsers = async (req, res) => {
   try {
     const query = req.query.q || "";
 
-    if (!query.trim()) {
-      return res.json([]);
-    }
+    if (!query.trim()) return res.json([]);
 
     const results = await User.aggregate([
       {
         $search: {
-          index: "h-search",
+          index: "h-search", 
           compound: {
             should: [
               {
                 autocomplete: {
                   query,
-                  path: "firstName",
-                  fuzzy: {
-                    maxEdits: 2,
-                    prefixLength: 0,
-                    maxExpansions: 50
-                  }
+                  path: "firstName"
                 }
               },
               {
                 autocomplete: {
                   query,
-                  path: "lastName",
-                  fuzzy: {
-                    maxEdits: 2,
-                    prefixLength: 0,
-                    maxExpansions: 50
-                  }
+                  path: "lastName"
                 }
               },
               {
                 autocomplete: {
                   query,
-                  path: "username",
-                  fuzzy: {
-                    maxEdits: 2,
-                    prefixLength: 0,
-                    maxExpansions: 50
-                  }
+                  path: "username"
                 }
               }
             ]
@@ -160,8 +144,7 @@ export const searchUsers = async (req, res) => {
           username: 1,
           firstName: 1,
           lastName: 1,
-          profilePicture: 1,
-          email: 1
+          profilePicture: 1
         }
       }
     ]);
