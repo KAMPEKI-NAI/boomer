@@ -13,7 +13,6 @@ import { connectDB } from "./config/db.js";
 import { arcjetMiddleware } from "./middleware/arcjet.middleware.js";
 
 
-const searchRoutes = require('./routes/searchRoutes');
 const app = express();
 
 app.use(cors());
