@@ -1,6 +1,7 @@
 import { CONVERSATIONS, ConversationType } from "@/data/conversations";
 import { Feather } from "@expo/vector-icons";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { io, Socket } from "socket.io-client";
 import {
   View,
   Text,
