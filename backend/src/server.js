@@ -1,79 +1,84 @@
 import express from "express";
+import http from "http";
 import cors from "cors";
-import { clerkMiddleware } from "@clerk/express";
+import dotenv from "dotenv";
+import jwt from "jsonwebtoken";
+import { Server } from "socket.io";
 
-import userRoutes from "./routes/user.route.js";
-import postRoutes from "./routes/post.route.js";
-import commentRoutes from "./routes/comment.route.js";
-import notificationRoutes from "./routes/notification.route.js";
-import router from "./routes/search.route.js";
+import connectDB from "./config/db.js";
+import messageRoutes from "./routes/message.routes.js";
+import Message from "./models/Message.js";
 
-import { ENV } from "./config/env.js";
-import { connectDB } from "./config/db.js";
-import { arcjetMiddleware } from "./middleware/arcjet.middleware.js";
-
+dotenv.config();
+connectDB();
 
 const app = express();
-const express = require('express');
-const http =require('http');
-const socketIo = require('socket.io');
-const io = socketIo(Server);
 
+/* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
 
-app.use('/api', router);
+/* ================= ROUTES ================= */
+app.use("/api/messages", messageRoutes);
 
+/* ================= HTTP + SOCKET SERVER ================= */
+const server = http.createServer(app);
 
-app.use(clerkMiddleware());
-app.use(arcjetMiddleware);
-
-app.get("/", (req, res) => res.send("Hello from server"));
-
-app.use("/api/users", userRoutes);
-app.use("/api/posts", postRoutes);
-app.use("/api/comments", commentRoutes);
-app.use("/api/notifications", notificationRoutes);
-
-// error handling middleware
-app.use((err, req, res, next) => {
-  console.error("Unhandled error:", err);
-  res.status(500).json({ error: err.message || "Internal server error" });
+const io = new Server(server, {
+  cors: {
+    origin: "*", // later restrict this
+  },
 });
 
-io.on('connection', (socket) => {
-  console.log('New client connected');
+/* ================= SOCKET AUTH (JWT) ================= */
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
 
-  socket.on('sendMessage', (data) => {
-    // Broadcast the message to the recipient
-    io.to(data.receiverId).emit('newMessage', data);
+  if (!token) {
+    return next(new Error("Unauthorized"));
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.userId = decoded.userId; // attach userId to socket
+    next();
+  } catch (err) {
+    next(new Error("Invalid token"));
+  }
+});
+
+/* ================= SOCKET EVENTS ================= */
+io.on("connection", (socket) => {
+  console.log("User connected:", socket.userId);
+
+  // Join private room
+  socket.join(socket.userId);
+
+  socket.on("sendMessage", async ({ receiverId, text }) => {
+    if (!receiverId || !text) return;
+
+    // Save message to DB
+    const message = await Message.create({
+      senderId: socket.userId,
+      receiverId,
+      text,
+    });
+
+    // Send to receiver
+    io.to(receiverId).emit("newMessage", message);
+
+    // Send back to sender (for sync)
+    io.to(socket.userId).emit("newMessage", message);
   });
 
-  socket.on('disconnect', () => {
-    console.log('Client disconnected');
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.userId);
   });
 });
 
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
-
-const startServer = async () => {
-  try {
-    await connectDB();
-
-    // listen for local development
-    if (ENV.NODE_ENV !== "production") {
-      app.listen(ENV.PORT, () => console.log("Server is up and running on PORT:", ENV.PORT));
-    }
-  } catch (error) {
-    console.error("Failed to start server:", error.message);
-    process.exit(1);
-  }
-};
-
-startServer();
-
-// export for vercel
-export default app;

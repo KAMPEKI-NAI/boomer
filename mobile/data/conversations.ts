@@ -1,7 +1,7 @@
 export type MessageType = {
   id: number;
   text: string;
-  fromUser: boolean; // true if message is from current user, false if from other user
+  fromUser: boolean; // true if message is from current user
   timestamp: Date;
   time: string;
 };
@@ -9,6 +9,7 @@ export type MessageType = {
 export type ConversationType = {
   id: number;
   user: {
+    id: string; // <-- ADDED
     name: string;
     username: string;
     avatar: string;
@@ -20,10 +21,12 @@ export type ConversationType = {
   messages: MessageType[];
 };
 
+/* ================= MOCK CONVERSATIONS ================= */
 export const CONVERSATIONS: ConversationType[] = [
   {
     id: 1,
     user: {
+      id: "user_1", // <-- ADDED
       name: "James Doe",
       username: "jamesdoe",
       avatar:
@@ -60,6 +63,7 @@ export const CONVERSATIONS: ConversationType[] = [
   {
     id: 2,
     user: {
+      id: "user_2", // <-- ADDED
       name: "Coffee Lover",
       username: "coffeelover",
       avatar:
@@ -96,6 +100,7 @@ export const CONVERSATIONS: ConversationType[] = [
   {
     id: 3,
     user: {
+      id: "user_3", // <-- ADDED
       name: "Alex Johnson",
       username: "alexj",
       avatar:
@@ -132,6 +137,7 @@ export const CONVERSATIONS: ConversationType[] = [
   {
     id: 4,
     user: {
+      id: "user_4", // <-- ADDED
       name: "Design Studio",
       username: "designstudio",
       avatar:
