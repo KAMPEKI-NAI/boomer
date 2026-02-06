@@ -1,4 +1,4 @@
-import { CONVERSATIONS, ConversationType } from "@/data/conversations";
+import { CONVERSATIONS, ConversationType, MessageType } from "@/data/conversations";
 import { Feather } from "@expo/vector-icons";
 import { useState, useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
@@ -13,56 +13,120 @@ import {
   Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "@clerk/clerk-expo";
+
+/* 🔴 CHANGE THIS TO YOUR LOCAL IP */
+const SOCKET_URL = "http://192.168.0.111:3000";
 
 const MessagesScreen = () => {
+  // ✅ Clerk auth
+  const { userId, getToken } = useAuth();
+
+  const socketRef = useRef<Socket | null>(null);
+
   const [searchText, setSearchText] = useState("");
   const [conversationsList, setConversationsList] = useState(CONVERSATIONS);
-  const [selectedConversation, setSelectedConversation] = useState<ConversationType | null>(null);
+  const [selectedConversation, setSelectedConversation] =
+    useState<ConversationType | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [newMessage, setNewMessage] = useState("");
+  const [messages, setMessages] = useState<MessageType[]>([]);
 
-  const deleteConversation = (conversationId: number) => {
-    Alert.alert("Delete Conversation", "Are you sure you want to delete this conversation?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          setConversationsList((prev) => prev.filter((conv) => conv.id !== conversationId));
-        },
-      },
-    ]);
-  };
+  /* ================= SOCKET CONNECTION ================= */
+  useEffect(() => {
+    if (!userId) return; // wait until Clerk provides userId
 
-  const openConversation = (conversation: ConversationType) => {
+    const setupSocket = async () => {
+      const token = await getToken();
+
+      socketRef.current = io(SOCKET_URL, {
+        transports: ["websocket"],
+        auth: { token }, // send Clerk token to backend
+      });
+
+      socketRef.current.on("connect", () => {
+        console.log("Socket connected:", socketRef.current?.id);
+      });
+
+      socketRef.current.on("newMessage", (message: MessageType) => {
+        setMessages((prev) => [...prev, message]);
+      });
+    };
+
+    setupSocket();
+
+    return () => {
+      socketRef.current?.disconnect();
+    };
+  }, [userId, getToken]); // ✅ include getToken to fix warning
+
+  /* ================= CONVERSATION HANDLERS ================= */
+  const openConversation = async (conversation: ConversationType) => {
     setSelectedConversation(conversation);
     setIsChatOpen(true);
+
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${SOCKET_URL}/api/messages/${conversation.user.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      const data = await res.json();
+      setMessages(data);
+    } catch (err) {
+      console.log("Failed to load messages", err);
+    }
   };
 
   const closeChatModal = () => {
     setIsChatOpen(false);
     setSelectedConversation(null);
+    setMessages([]);
     setNewMessage("");
   };
 
-  const sendMessage = () => {
-    if (newMessage.trim() && selectedConversation) {
-      // update last message in conversation
-      setConversationsList((prev) =>
-        prev.map((conv) =>
-          conv.id === selectedConversation.id
-            ? { ...conv, lastMessage: newMessage, time: "now" }
-            : conv
-        )
-      );
-      setNewMessage("");
-      Alert.alert(
-        "Message Sent!",
-        `Your message has been sent to ${selectedConversation.user.name}`
-      );
-    }
+  const deleteConversation = (conversationId: number) => {
+    Alert.alert("Delete Conversation", "Are you sure?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          setConversationsList((prev) =>
+            prev.filter((conv) => conv.id !== conversationId)
+          );
+        },
+      },
+    ]);
   };
 
+  /* ================= SEND MESSAGE ================= */
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !selectedConversation || !userId) return;
+
+    const messageData: MessageType = {
+      id: Date.now(), // temporary local id
+      text: newMessage,
+      fromUser: true,
+      timestamp: new Date(),
+      time: "now",
+    };
+
+    socketRef.current?.emit("sendMessage", {
+      ...messageData,
+      receiverId: selectedConversation.user.id,
+      senderId: userId,
+    });
+
+    setMessages((prev) => [...prev, messageData]);
+    setNewMessage("");
+  };
+
+  /* ================= UI ================= */
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
       {/* HEADER */}
@@ -73,30 +137,25 @@ const MessagesScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Search Bar */}
+      {/* SEARCH */}
       <View className="px-4 py-3 border-b border-gray-100">
         <View className="flex-row items-center bg-gray-100 rounded-full px-4 py-3">
           <Feather name="search" size={20} color="#657786" />
           <TextInput
-            placeholder="Search for people and groups"
+            placeholder="Search"
             className="flex-1 ml-3 text-base"
-            placeholderTextColor="#657786"
             value={searchText}
             onChangeText={setSearchText}
           />
         </View>
       </View>
 
-      {/* CONVERSATIONS LIST */}
-      <ScrollView
-        className="flex-1"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
-      >
+      {/* CONVERSATIONS */}
+      <ScrollView className="flex-1">
         {conversationsList.map((conversation) => (
           <TouchableOpacity
             key={conversation.id}
-            className="flex-row items-center p-4 border-b border-gray-50 active:bg-gray-50"
+            className="flex-row items-center p-4 border-b border-gray-50"
             onPress={() => openConversation(conversation)}
             onLongPress={() => deleteConversation(conversation.id)}
           >
@@ -104,19 +163,9 @@ const MessagesScreen = () => {
               source={{ uri: conversation.user.avatar }}
               className="size-12 rounded-full mr-3"
             />
-
             <View className="flex-1">
-              <View className="flex-row items-center justify-between mb-1">
-                <View className="flex-row items-center gap-1">
-                  <Text className="font-semibold text-gray-900">{conversation.user.name}</Text>
-                  {conversation.user.verified && (
-                    <Feather name="check-circle" size={16} color="#1DA1F2" className="ml-1" />
-                  )}
-                  <Text className="text-gray-500 text-sm ml-1">@{conversation.user.username}</Text>
-                </View>
-                <Text className="text-gray-500 text-sm">{conversation.time}</Text>
-              </View>
-              <Text className="text-sm text-gray-500" numberOfLines={1}>
+              <Text className="font-semibold">{conversation.user.name}</Text>
+              <Text className="text-gray-500" numberOfLines={1}>
                 {conversation.lastMessage}
               </Text>
             </View>
@@ -124,94 +173,57 @@ const MessagesScreen = () => {
         ))}
       </ScrollView>
 
-      {/* Quick Actions */}
-      <View className="px-4 py-2 border-t border-gray-100 bg-gray-50">
-        <Text className="text-xs text-gray-500 text-center">
-          Tap to open • Long press to delete
-        </Text>
-      </View>
-
-      <Modal visible={isChatOpen} animationType="slide" presentationStyle="pageSheet">
+      {/* CHAT MODAL */}
+      <Modal visible={isChatOpen} animationType="slide">
         {selectedConversation && (
           <SafeAreaView className="flex-1">
-            {/* Chat Header */}
-            <View className="flex-row items-center px-4 py-3 border-b border-gray-100">
-              <TouchableOpacity onPress={closeChatModal} className="mr-3">
+            {/* HEADER */}
+            <View className="flex-row items-center px-4 py-3 border-b">
+              <TouchableOpacity onPress={closeChatModal}>
                 <Feather name="arrow-left" size={24} color="#1DA1F2" />
               </TouchableOpacity>
-              <Image
-                source={{ uri: selectedConversation.user.avatar }}
-                className="size-10 rounded-full mr-3"
-              />
-              <View className="flex-1">
-                <View className="flex-row items-center">
-                  <Text className="font-semibold text-gray-900 mr-1">
-                    {selectedConversation.user.name}
-                  </Text>
-                  {selectedConversation.user.verified && (
-                    <Feather name="check-circle" size={16} color="#1DA1F2" />
-                  )}
-                </View>
-                <Text className="text-gray-500 text-sm">@{selectedConversation.user.username}</Text>
-              </View>
+              <Text className="ml-4 font-semibold">
+                {selectedConversation.user.name}
+              </Text>
             </View>
 
-            {/* Chat Messages Area */}
+            {/* MESSAGES */}
             <ScrollView className="flex-1 px-4 py-4">
-              <View className="mb-4">
-                <Text className="text-center text-gray-400 text-sm mb-4">
-                  This is the beginning of your conversation with {selectedConversation.user.name}
-                </Text>
-
-                {/* Conversation Messages */}
-                {selectedConversation.messages.map((message) => (
+              {messages.map((message) => (
+                <View
+                  key={message.id}
+                  className={`mb-3 ${
+                    message.fromUser ? "items-end" : "items-start"
+                  }`}
+                >
                   <View
-                    key={message.id}
-                    className={`flex-row mb-3 ${message.fromUser ? "justify-end" : ""}`}
+                    className={`px-4 py-3 rounded-2xl max-w-xs ${
+                      message.fromUser ? "bg-blue-500" : "bg-gray-100"
+                    }`}
                   >
-                    {!message.fromUser && (
-                      <Image
-                        source={{ uri: selectedConversation.user.avatar }}
-                        className="size-8 rounded-full mr-2"
-                      />
-                    )}
-                    <View className={`flex-1 ${message.fromUser ? "items-end" : ""}`}>
-                      <View
-                        className={`rounded-2xl px-4 py-3 max-w-xs ${
-                          message.fromUser ? "bg-blue-500" : "bg-gray-100"
-                        }`}
-                      >
-                        <Text className={message.fromUser ? "text-white" : "text-gray-900"}>
-                          {message.text}
-                        </Text>
-                      </View>
-                      <Text className="text-xs text-gray-400 mt-1">{message.time}</Text>
-                    </View>
+                    <Text
+                      className={message.fromUser ? "text-white" : "text-black"}
+                    >
+                      {message.text}
+                    </Text>
                   </View>
-                ))}
-              </View>
+                </View>
+              ))}
             </ScrollView>
 
-            {/* Message Input */}
-            <View className="flex-row items-center px-4 py-3 border-t border-gray-100">
-              <View className="flex-1 flex-row items-center bg-gray-100 rounded-full px-4 py-3 mr-3">
-                <TextInput
-                  className="flex-1 text-base"
-                  placeholder="Start a message..."
-                  placeholderTextColor="#657786"
-                  value={newMessage}
-                  onChangeText={setNewMessage}
-                  multiline
-                />
-              </View>
+            {/* INPUT */}
+            <View className="flex-row px-4 py-3 border-t">
+              <TextInput
+                className="flex-1 bg-gray-100 rounded-full px-4"
+                placeholder="Start a message..."
+                value={newMessage}
+                onChangeText={setNewMessage}
+              />
               <TouchableOpacity
                 onPress={sendMessage}
-                className={`size-10 rounded-full items-center justify-center ${
-                  newMessage.trim() ? "bg-blue-500" : "bg-gray-300"
-                }`}
-                disabled={!newMessage.trim()}
+                className="ml-2 bg-blue-500 size-10 rounded-full items-center justify-center"
               >
-                <Feather name="send" size={20} color="white" />
+                <Feather name="send" size={18} color="white" />
               </TouchableOpacity>
             </View>
           </SafeAreaView>
