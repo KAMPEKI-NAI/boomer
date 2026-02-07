@@ -6,8 +6,8 @@ import jwt from "jsonwebtoken";
 import { Server } from "socket.io";
 
 import connectDB from "./config/db.js";
-import messageRoutes from "./routes/message.routes.js";
-import Message from "./models/Message.js";
+import messageRoutes from "./routes/messages.route.js";
+import Message from "./Models/messages.model.js";
 
 dotenv.config();
 connectDB();
