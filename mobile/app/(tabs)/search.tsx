@@ -8,24 +8,22 @@ import {
   Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-/* =======================
-   TYPES
-======================= */
+/* ===================== TYPES ===================== */
 
 interface User {
   id: string;
   name: string;
   username: string;
-  profile_image_url: string;
+  profilePicture: string;
 }
 
 interface PostData {
   id: string;
   text: string;
-  created_at: string;
+  createdAt: string;
   author: User;
 }
 
@@ -34,16 +32,16 @@ interface SearchResultItem {
   data: User | PostData;
 }
 
-/* =======================
-   API CALL
-======================= */
+/* ===================== API CALL ===================== */
 
 const fetchSearchResultsFromDB = async (
   query: string
 ): Promise<SearchResultItem[]> => {
   try {
     const res = await fetch(
-      `https://YOUR_BACKEND_URL/api/search?q=${encodeURIComponent(query)}`
+      `https://boomer-two.vercel.app/api/search?q=${encodeURIComponent(
+        query
+      )}`
     );
 
     if (!res.ok) throw new Error("Search failed");
@@ -67,9 +65,7 @@ const fetchSearchResultsFromDB = async (
   }
 };
 
-/* =======================
-   COMPONENT
-======================= */
+/* ===================== COMPONENT ===================== */
 
 const SearchScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -77,6 +73,8 @@ const SearchScreen = () => {
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadRecentSearches();
@@ -88,11 +86,10 @@ const SearchScreen = () => {
   };
 
   const saveRecentSearch = async (query: string) => {
-    const updated = [
-      query,
-      ...recentSearches.filter((q) => q !== query),
-    ].slice(0, 10);
-
+    const updated = [query, ...recentSearches.filter((q) => q !== query)].slice(
+      0,
+      10
+    );
     setRecentSearches(updated);
     await AsyncStorage.setItem("recentSearches", JSON.stringify(updated));
   };
@@ -109,23 +106,25 @@ const SearchScreen = () => {
     setHasSearched(false);
   };
 
-  const handleSubmit = async () => {
-    const query = searchQuery.trim();
-    if (!query) return;
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
 
-    setIsLoading(true);
-    setHasSearched(true);
-    saveRecentSearch(query);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
 
-    const results = await fetchSearchResultsFromDB(query);
-    setSearchResults(results);
+    debounceRef.current = setTimeout(async () => {
+      if (!query.trim()) return;
 
-    setIsLoading(false);
+      setIsLoading(true);
+      setHasSearched(true);
+
+      saveRecentSearch(query);
+
+      const results = await fetchSearchResultsFromDB(query);
+      setSearchResults(results);
+
+      setIsLoading(false);
+    }, 400); // 400ms debounce
   };
-
-  /* =======================
-     UI ITEMS
-  ======================= */
 
   const TopicItem = ({
     text,
@@ -156,8 +155,7 @@ const SearchScreen = () => {
         <Image
           source={{
             uri:
-              user.profile_image_url ||
-              "https://via.placeholder.com/150",
+              user.profilePicture || "https://via.placeholder.com/150",
           }}
           className="w-12 h-12 rounded-full"
         />
@@ -172,28 +170,21 @@ const SearchScreen = () => {
             <>
               <Text className="text-gray-900 mt-1">{post.text}</Text>
               <Text className="text-gray-500 text-sm mt-1">
-                {new Date(post.created_at).toLocaleString()}
+                {new Date(post.createdAt).toLocaleString()}
               </Text>
             </>
           )}
 
           {isUser && (
-            <Text className="text-blue-500 text-sm mt-1">
-              User result
-            </Text>
+            <Text className="text-blue-500 text-sm mt-1">User result</Text>
           )}
         </View>
       </View>
     );
   };
 
-  /* =======================
-     RENDER
-  ======================= */
-
   return (
     <SafeAreaView className="flex-1 bg-white">
-      {/* Search Bar */}
       <View className="px-4 py-3 border-b border-gray-100">
         <View className="flex-row items-center bg-gray-100 rounded-full px-4 py-3">
           <Feather name="search" size={20} color="#657786" />
@@ -201,8 +192,7 @@ const SearchScreen = () => {
             placeholder="Search users and posts..."
             className="flex-1 ml-3 text-base"
             value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={handleSubmit}
+            onChangeText={handleSearch}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={clearSearch}>
@@ -213,21 +203,21 @@ const SearchScreen = () => {
       </View>
 
       <ScrollView>
-        {isLoading && (
-          <Text className="p-4 text-center">Searching...</Text>
-        )}
+        {isLoading && <Text className="p-4 text-center">Searching...</Text>}
 
         {!isLoading && searchResults.length > 0 && (
           <View className="p-4">
             <Text className="text-xl font-bold mb-4">
-              Results for &quot;{searchQuery}&quot;
+              {`Results for "${searchQuery}"`}
             </Text>
 
             {searchResults.map((item) => (
               <ResultItem
-                key={item.type === "user"
-                  ? (item.data as User).id
-                  : (item.data as PostData).id}
+                key={
+                  item.type === "user"
+                    ? (item.data as User).id
+                    : (item.data as PostData).id
+                }
                 item={item}
               />
             ))}
@@ -236,24 +226,19 @@ const SearchScreen = () => {
 
         {!isLoading && hasSearched && searchResults.length === 0 && (
           <Text className="text-center text-gray-500 mt-6">
-            No results found for &quot;{searchQuery}&quot;
+            {'No results found for "{searchQuery}"'}
           </Text>
         )}
 
         {!hasSearched && recentSearches.length > 0 && (
           <View className="p-4">
-            <Text className="text-xl font-bold mb-4">
-              Recent searches
-            </Text>
+            <Text className="text-xl font-bold mb-4">Recent searches</Text>
 
             {recentSearches.map((item) => (
               <TopicItem
                 key={item}
                 text={item}
-                onPress={() => {
-                  setSearchQuery(item);
-                  handleSubmit();
-                }}
+                onPress={() => handleSearch(item)}
                 onDelete={() => deleteRecentSearch(item)}
               />
             ))}
