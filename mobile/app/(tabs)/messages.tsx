@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/clerk-expo";
 
 
-const API_URL = "http://192.168.0.111:3000";
+const API_URL = "192.168.212.116:3000";
 
 const MessagesScreen = () => {
   const { userId, getToken } = useAuth();
