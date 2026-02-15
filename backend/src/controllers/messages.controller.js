@@ -1,10 +1,9 @@
+// controllers/messages.controller.js
 import Message from "../Models/messages.model.js";
+import User from "../Models/user.model.js"; // Import User model
 import { getAuth } from "@clerk/express";
 
-/**
- * Send a message
- * POST /api/messages
- */
+// Send a message
 export const sendMessage = async (req, res) => {
   const { userId } = getAuth(req);
   const { receiverId, text } = req.body;
@@ -26,10 +25,7 @@ export const sendMessage = async (req, res) => {
   res.status(201).json(message);
 };
 
-/**
- * Get conversation between logged-in user & another user
- * GET /api/messages/:otherUserId
- */
+// Get conversation between logged-in user & another user
 export const getConversation = async (req, res) => {
   const { userId } = getAuth(req);
   const { otherUserId } = req.params;
@@ -48,11 +44,7 @@ export const getConversation = async (req, res) => {
   res.json(messages);
 };
 
-/**
- * Delete a message (only sender can delete)
- * DELETE /api/messages/:messageId
- */
-
+// Get all conversations
 export const getAllConversations = async (req, res) => {
   const { userId } = getAuth(req);
 
@@ -61,12 +53,10 @@ export const getAllConversations = async (req, res) => {
   }
 
   try {
-    // Find all messages where user is sender or receiver
     const messages = await Message.find({
       $or: [{ senderId: userId }, { receiverId: userId }],
     }).sort({ createdAt: -1 });
 
-    // Group by other user
     const conversationsMap = new Map();
 
     messages.forEach((message) => {
@@ -85,14 +75,28 @@ export const getAllConversations = async (req, res) => {
     });
 
     const conversations = Array.from(conversationsMap.values());
-
     res.json(conversations);
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }
 };
 
+// Search users
+export const searchUsers = async (req, res) => {
+  const { query } = req.query;
 
+  try {
+    const users = await User.find({
+      name: { $regex: query, $options: "i" },
+    }).limit(10);
+
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// Delete a message
 export const deleteMessage = async (req, res) => {
   const { userId } = getAuth(req);
   const { messageId } = req.params;

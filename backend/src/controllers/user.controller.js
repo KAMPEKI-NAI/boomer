@@ -23,6 +23,24 @@ export const updateProfile = asyncHandler(async (req, res) => {
   res.status(200).json({ user });
 });
 
+export const getAllUsers = async (req, res) => {
+  const { userId } = getAuth(req);
+
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const users = await User.find({
+      clerkId: { $ne: userId },
+    }).select("clerkId username avatar");
+
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 export const syncUser = asyncHandler(async (req, res) => {
   const { userId } = getAuth(req);
 

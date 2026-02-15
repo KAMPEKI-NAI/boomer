@@ -1,5 +1,6 @@
 import express from "express";
 import { searchUsers } from "../controllers/user.controller.js";
+import { getAllUsers } from "../controllers/users.controller.js";
 import {
   followUser,
   getCurrentUser,
@@ -15,6 +16,8 @@ const router = express.Router();
 router.get("/profile/:username", getUserProfile);
 
 router.get("/search", searchUsers);
+
+router.get("/", getAllUsers);
 
 // protected routes
 router.post("/sync", protectRoute, syncUser);
