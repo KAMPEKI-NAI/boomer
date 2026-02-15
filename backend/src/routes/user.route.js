@@ -1,6 +1,6 @@
 import express from "express";
 import { searchUsers } from "../controllers/user.controller.js";
-import { getAllUsers } from "../controllers/users.controller.js";
+import { getAllUsers } from "../controllers/user.controller.js";
 import {
   followUser,
   getCurrentUser,
