@@ -1,6 +1,8 @@
 import express from "express";
 import {
   sendMessage,
+  getConversation,
+  getAllConversations,
   deleteMessage,
 } from "../controllers/messages.controller.js";
 

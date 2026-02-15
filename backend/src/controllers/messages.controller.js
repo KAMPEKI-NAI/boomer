@@ -52,6 +52,47 @@ export const getConversation = async (req, res) => {
  * Delete a message (only sender can delete)
  * DELETE /api/messages/:messageId
  */
+
+export const getAllConversations = async (req, res) => {
+  const { userId } = getAuth(req);
+
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    // Find all messages where user is sender or receiver
+    const messages = await Message.find({
+      $or: [{ senderId: userId }, { receiverId: userId }],
+    }).sort({ createdAt: -1 });
+
+    // Group by other user
+    const conversationsMap = new Map();
+
+    messages.forEach((message) => {
+      const otherUser =
+        message.senderId === userId
+          ? message.receiverId
+          : message.senderId;
+
+      if (!conversationsMap.has(otherUser)) {
+        conversationsMap.set(otherUser, {
+          userId: otherUser,
+          lastMessage: message.text,
+          lastMessageDate: message.createdAt,
+        });
+      }
+    });
+
+    const conversations = Array.from(conversationsMap.values());
+
+    res.json(conversations);
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+
 export const deleteMessage = async (req, res) => {
   const { userId } = getAuth(req);
   const { messageId } = req.params;
