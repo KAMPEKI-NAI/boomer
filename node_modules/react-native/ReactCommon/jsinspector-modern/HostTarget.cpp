@@ -34,8 +34,7 @@ class HostTargetSession {
       std::unique_ptr<IRemoteConnection> remote,
       HostTargetController& targetController,
       HostTargetMetadata hostMetadata,
-      VoidExecutor executor,
-      std::optional<tracing::TraceRecordingState> traceRecordingToEmit)
+      VoidExecutor executor)
       : remote_(std::make_shared<RAIIRemoteConnection>(std::move(remote))),
         frontendChannel_(
             [remoteWeak = std::weak_ptr(remote_)](std::string_view message) {
@@ -48,8 +47,7 @@ class HostTargetSession {
             targetController,
             std::move(hostMetadata),
             state_,
-            std::move(executor),
-            std::move(traceRecordingToEmit)) {}
+            std::move(executor)) {}
 
   /**
    * Called by CallbackLocalConnection to send a message to this Session's
@@ -65,8 +63,9 @@ class HostTargetSession {
           cdp::jsonError(std::nullopt, cdp::ErrorCode::ParseError, e.what()));
       return;
     } catch (const cdp::TypeError& e) {
-      frontendChannel_(cdp::jsonError(
-          std::nullopt, cdp::ErrorCode::InvalidRequest, e.what()));
+      frontendChannel_(
+          cdp::jsonError(
+              std::nullopt, cdp::ErrorCode::InvalidRequest, e.what()));
       return;
     }
 
@@ -101,6 +100,20 @@ class HostTargetSession {
     } else {
       hostAgent_.setCurrentInstanceAgent(nullptr);
     }
+  }
+
+  /**
+   * Returns whether the ReactNativeApplication CDP domain is enabled.
+   *
+   * Chrome DevTools Frontend enables this domain as a client.
+   */
+  bool hasFuseboxClient() const {
+    return hostAgent_.hasFuseboxClientConnected();
+  }
+
+  void emitHostTracingProfile(
+      tracing::HostTracingProfile tracingProfile) const {
+    hostAgent_.emitExternalTracingProfile(std::move(tracingProfile));
   }
 
  private:
@@ -159,28 +172,30 @@ class HostRuntimeBinding {
       HostTarget& target,
       std::string name,
       std::function<void(std::string)> callback)
-      : connection_(target.connect(std::make_unique<CallbackRemoteConnection>(
-            [callback = std::move(callback)](const std::string& message) {
-              auto parsedMessage = folly::parseJson(message);
+      : connection_(target.connect(
+            std::make_unique<CallbackRemoteConnection>(
+                [callback = std::move(callback)](const std::string& message) {
+                  auto parsedMessage = folly::parseJson(message);
 
-              // Ignore initial Runtime.addBinding response
-              if (parsedMessage["id"] == 0 &&
-                  parsedMessage["result"].isObject() &&
-                  parsedMessage["result"].empty()) {
-                return;
-              }
+                  // Ignore initial Runtime.addBinding response
+                  if (parsedMessage["id"] == 0 &&
+                      parsedMessage["result"].isObject() &&
+                      parsedMessage["result"].empty()) {
+                    return;
+                  }
 
-              // Assert that we only intercept bindingCalled responses
-              assert(
-                  parsedMessage["method"].asString() ==
-                  "Runtime.bindingCalled");
-              callback(parsedMessage["params"]["payload"].asString());
-            }))) {
+                  // Assert that we only intercept bindingCalled responses
+                  assert(
+                      parsedMessage["method"].asString() ==
+                      "Runtime.bindingCalled");
+                  callback(parsedMessage["params"]["payload"].asString());
+                }))) {
     // Install runtime binding
-    connection_->sendMessage(cdp::jsonRequest(
-        0,
-        "Runtime.addBinding",
-        folly::dynamic::object("name", std::move(name))));
+    connection_->sendMessage(
+        cdp::jsonRequest(
+            0,
+            "Runtime.addBinding",
+            folly::dynamic::object("name", std::move(name))));
   }
 
  private:
@@ -192,8 +207,8 @@ std::shared_ptr<HostTarget> HostTarget::create(
     VoidExecutor executor) {
   std::shared_ptr<HostTarget> hostTarget{new HostTarget(delegate)};
   hostTarget->setExecutor(std::move(executor));
-  if (InspectorFlags::getInstance().getPerfMonitorV2Enabled()) {
-    hostTarget->installPerfMetricsBinding();
+  if (InspectorFlags::getInstance().getPerfIssuesEnabled()) {
+    hostTarget->installPerfIssuesBinding();
   }
   return hostTarget;
 }
@@ -208,8 +223,7 @@ std::unique_ptr<ILocalConnection> HostTarget::connect(
       std::move(connectionToFrontend),
       controller_,
       delegate_.getMetadata(),
-      makeVoidExecutor(executorFromThis()),
-      delegate_.unstable_getTraceRecordingThatWillBeEmittedOnInitialization());
+      makeVoidExecutor(executorFromThis()));
   session->setCurrentInstance(currentInstance_.get());
   sessions_.insert(std::weak_ptr(session));
   return std::make_unique<CallbackLocalConnection>(
@@ -279,14 +293,14 @@ void HostTarget::sendCommand(HostCommand command) {
   });
 }
 
-void HostTarget::installPerfMetricsBinding() {
+void HostTarget::installPerfIssuesBinding() {
   perfMonitorUpdateHandler_ =
       std::make_unique<PerfMonitorUpdateHandler>(delegate_);
   perfMetricsBinding_ = std::make_unique<HostRuntimeBinding>(
       *this, // Used immediately
-      "__chromium_devtools_metrics_reporter",
+      "__react_native_perf_issues_reporter",
       [this](const std::string& message) {
-        perfMonitorUpdateHandler_->handlePerfMetricsUpdate(message);
+        perfMonitorUpdateHandler_->handlePerfIssueAdded(message);
       });
 }
 
@@ -359,6 +373,34 @@ folly::dynamic createHostMetadataPayload(const HostTargetMetadata& metadata) {
   }
 
   return result;
+}
+
+bool HostTarget::hasActiveSessionWithFuseboxClient() const {
+  bool hasActiveFuseboxSession = false;
+  sessions_.forEach([&](HostTargetSession& session) {
+    hasActiveFuseboxSession |= session.hasFuseboxClient();
+  });
+  return hasActiveFuseboxSession;
+}
+
+void HostTarget::emitTracingProfileForFirstFuseboxClient(
+    tracing::HostTracingProfile tracingProfile) const {
+  bool emitted = false;
+  sessions_.forEach([&](HostTargetSession& session) {
+    if (emitted) {
+      /**
+       * HostTracingProfile object is not copiable for performance reasons,
+       * because it could contain large Runtime sampling profile object.
+       *
+       * This approach would not work with multi-client debugger setup.
+       */
+      return;
+    }
+    if (session.hasFuseboxClient()) {
+      session.emitHostTracingProfile(std::move(tracingProfile));
+      emitted = true;
+    }
+  });
 }
 
 } // namespace facebook::react::jsinspector_modern

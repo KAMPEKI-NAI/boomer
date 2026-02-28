@@ -7,7 +7,7 @@
 
 #import <UIKit/UIKit.h>
 
-#ifndef RCT_FIT_RM_OLD_COMPONENT
+#ifndef RCT_REMOVE_LEGACY_ARCH
 
 #import <React/RCTInvalidating.h>
 #import <React/RCTModalHostViewManager.h>
@@ -38,8 +38,10 @@ __attribute__((deprecated("This API will be removed along with the legacy archit
 
 @property (nonatomic, weak) id<RCTModalHostViewInteractor> delegate;
 
+#if !TARGET_OS_TV
 @property (nonatomic, copy) NSArray<NSString *> *supportedOrientations;
 @property (nonatomic, copy) RCTDirectEventBlock onOrientationChange;
+#endif
 
 // Fabric only
 @property (nonatomic, copy) RCTDirectEventBlock onDismiss;
@@ -59,4 +61,4 @@ __attribute__((deprecated("This API will be removed along with the legacy archit
 
 @end
 
-#endif // RCT_FIT_RM_OLD_COMPONENT
+#endif // RCT_REMOVE_LEGACY_ARCH

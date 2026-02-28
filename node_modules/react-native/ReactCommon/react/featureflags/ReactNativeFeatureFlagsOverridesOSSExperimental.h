@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
- * @generated SignedSource<<77870f0db494c7b6932950a1fa475fdc>>
+ * @generated SignedSource<<6a047fa1d33ea17ebd7ba8d0680ee1cc>>
  */
 
 /**
@@ -28,6 +28,14 @@ class ReactNativeFeatureFlagsOverridesOSSExperimental : public ReactNativeFeatur
     ReactNativeFeatureFlagsOverridesOSSExperimental() = default;
 
   bool enableAccessibilityOrder() override {
+    return true;
+  }
+
+  bool enableSwiftUIBasedFilters() override {
+    return true;
+  }
+
+  bool fixTextClippingAndroid15useBoundsForWidth() override {
     return true;
   }
 

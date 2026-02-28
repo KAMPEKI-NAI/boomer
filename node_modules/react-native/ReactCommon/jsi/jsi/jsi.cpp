@@ -231,8 +231,9 @@ inline char hexDigit(unsigned x) {
 // ASCII characters
 bool isAllASCII(const char16_t* utf16, size_t length) {
   for (const char16_t* e = utf16 + length; utf16 != e; ++utf16) {
-    if (*utf16 > 0x7F)
+    if (*utf16 > 0x7F) {
       return false;
+    }
   }
   return true;
 }
@@ -284,6 +285,10 @@ HostObject::~HostObject() {}
 
 NativeState::~NativeState() {}
 
+#ifdef JSI_UNSTABLE
+Serialized::~Serialized() {}
+#endif
+
 Runtime::~Runtime() {}
 
 ICast* Runtime::castInterface(const UUID& /*interfaceUUID*/) {
@@ -331,6 +336,10 @@ Instrumentation& Runtime::instrumentation() {
     }
 
     void writeBasicBlockProfileTraceToFile(const std::string&) const override {
+      std::abort();
+    }
+
+    void dumpOpcodeStats(std::ostream&) const override {
       std::abort();
     }
 

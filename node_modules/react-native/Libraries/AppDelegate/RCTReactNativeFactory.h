@@ -24,6 +24,8 @@
 @class RCTBridge;
 @protocol RCTComponentViewProtocol;
 @class RCTSurfacePresenterBridgeAdapter;
+@class RCTBundleConfiguration;
+@class RCTDevMenuConfiguration;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -115,6 +117,10 @@ typedef NS_ENUM(NSInteger, RCTReleaseLevel) { Canary, Experimental, Stable };
 ;
 
 @property (nonatomic, weak) id<RCTReactNativeFactoryDelegate> delegate;
+
+@property (nonatomic, strong, nonnull) RCTBundleConfiguration *bundleConfiguration;
+
+@property (nonatomic, nullable) RCTDevMenuConfiguration *devMenuConfiguration;
 
 @end
 

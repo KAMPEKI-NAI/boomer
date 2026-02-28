@@ -18,17 +18,21 @@
     "cloudinary": "^2.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
+    "expo": "^51.0.39",
     "express": "^5.1.0",
     "express-async-handler": "^1.2.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.16.0",
     "multer": "^2.0.2",
+    "react": "19.1.0",
+    "react-native": "^0.84.0",
     "socket.io": "^4.8.3"
   },
-  
   "engines": {
     "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-native": "^0.72.8"
   }
-
-
 }

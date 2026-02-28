@@ -8,6 +8,7 @@
 #include "AnimationTestsBase.h"
 
 #include <react/renderer/animated/nodes/ColorAnimatedNode.h>
+#include <react/renderer/animated/nodes/ObjectAnimatedNode.h>
 #include <react/renderer/core/ReactRootViewTagGenerator.h>
 #include <react/renderer/graphics/Color.h>
 
@@ -212,6 +213,123 @@ TEST_F(AnimatedNodeTests, DiffClampAnimatedNode) {
   nodesManager_->setAnimatedNodeValue(valueTag, 2);
   runAnimationFrame(0);
   EXPECT_EQ(nodesManager_->getValue(diffClampTag), 1);
+}
+
+TEST_F(AnimatedNodeTests, RoundAnimatedNodeUsesNearestConfigKey) {
+  // This test verifies that RoundAnimatedNode reads the "nearest" config key
+  // for the rounding factor, not the "input" key.
+  initNodesManager();
+
+  auto rootTag = getNextRootViewTag();
+
+  auto valueTag = ++rootTag;
+  auto roundTag = ++rootTag;
+
+  nodesManager_->createAnimatedNode(
+      valueTag,
+      folly::dynamic::object("type", "value")("value", 7.3)("offset", 0));
+
+  // The round node should read "nearest" for the rounding factor (5.0),
+  // not "input" (which is the valueTag integer).
+  nodesManager_->createAnimatedNode(
+      roundTag,
+      folly::dynamic::object("type", "round")("input", valueTag)(
+          "nearest", 5.0));
+  nodesManager_->connectAnimatedNodes(valueTag, roundTag);
+
+  runAnimationFrame(0);
+
+  // 7.3 rounded to nearest 5.0 should be 5.0 (since round(7.3/5) * 5 = 1 * 5)
+  // If the bug existed (reading "input" instead of "nearest"), it would use
+  // the valueTag as the rounding factor, giving incorrect results.
+  EXPECT_DOUBLE_EQ(nodesManager_->getValue(roundTag).value(), 5.0);
+
+  // Test another value to ensure rounding works correctly
+  nodesManager_->setAnimatedNodeValue(valueTag, 12.6);
+  runAnimationFrame(0);
+
+  // 12.6 rounded to nearest 5.0 should be 15.0 (since round(12.6/5) * 5 = 3 *
+  // 5)
+  EXPECT_DOUBLE_EQ(nodesManager_->getValue(roundTag).value(), 15.0);
+}
+
+TEST_F(AnimatedNodeTests, SetOffsetReturnsFalseWhenUnchanged) {
+  // This test verifies that setAnimatedNodeOffset doesn't trigger unnecessary
+  // updates when the offset value hasn't changed.
+  initNodesManager();
+
+  auto rootTag = getNextRootViewTag();
+  auto valueTag = ++rootTag;
+
+  nodesManager_->createAnimatedNode(
+      valueTag,
+      folly::dynamic::object("type", "value")("value", 10)("offset", 0));
+
+  runAnimationFrame(0);
+  EXPECT_EQ(nodeNeedsUpdate(valueTag), false);
+
+  // First setOffset should mark the node as needing update
+  nodesManager_->setAnimatedNodeOffset(valueTag, 5);
+  EXPECT_EQ(nodeNeedsUpdate(valueTag), true);
+  EXPECT_EQ(nodesManager_->getValue(valueTag), 15); // 10 + 5
+
+  runAnimationFrame(0);
+  EXPECT_EQ(nodeNeedsUpdate(valueTag), false);
+
+  // Setting the same offset again should NOT mark the node as needing update
+  nodesManager_->setAnimatedNodeOffset(valueTag, 5);
+  EXPECT_EQ(nodeNeedsUpdate(valueTag), false); // No change, no update needed
+  EXPECT_EQ(nodesManager_->getValue(valueTag), 15); // Still 10 + 5
+}
+
+TEST_F(AnimatedNodeTests, ObjectAnimatedNode) {
+  initNodesManager();
+
+  auto rootTag = getNextRootViewTag();
+
+  auto valueTag = ++rootTag;
+  auto objectTag = ++rootTag;
+  nodesManager_->createAnimatedNode(
+      valueTag,
+      folly::dynamic::object("type", "value")("value", 4)("offset", 0));
+
+  nodesManager_->createAnimatedNode(
+      objectTag,
+      folly::dynamic::object("type", "object")(
+          "value",
+          folly::dynamic::array(
+              folly::dynamic::object(
+                  "translate3d",
+                  folly::dynamic::object("x", 1)("y", 0)("z", 0)),
+              folly::dynamic::object(
+                  "rotate3d",
+                  folly::dynamic::object("x", 1)("y", 0)("z", 0)(
+                      "angle", "180deg")),
+              folly::dynamic::object(
+                  "scale3d", folly::dynamic::object("nodeTag", valueTag)))));
+
+  nodesManager_->connectAnimatedNodes(valueTag, objectTag);
+
+  const auto objectNode =
+      nodesManager_->getAnimatedNode<ObjectAnimatedNode>(objectTag);
+  folly::dynamic collectedProps = folly::dynamic::object();
+  objectNode->collectViewUpdates("test", collectedProps);
+
+  const auto expected = folly::dynamic::object(
+      "test",
+      folly::dynamic::array(
+          folly::dynamic::object(
+              "translate3d", folly::dynamic::object("x", 1)("y", 0)("z", 0)),
+          folly::dynamic::object(
+              "rotate3d",
+              folly::dynamic::object("x", 1)("y", 0)("z", 0)(
+                  "angle", "180deg")),
+          folly::dynamic::object("scale3d", 4)));
+  EXPECT_EQ(collectedProps["test"].size(), 3);
+  EXPECT_EQ(collectedProps["test"][0]["translate3d"]["x"], 1);
+  EXPECT_EQ(collectedProps["test"][1]["rotate3d"]["y"], 0);
+  EXPECT_EQ(collectedProps["test"][1]["rotate3d"]["angle"], "180deg");
+  EXPECT_EQ(collectedProps["test"][2]["scale3d"], 4);
 }
 
 } // namespace facebook::react

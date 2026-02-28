@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -15,24 +14,11 @@ namespace facebook::react::jsinspector_modern {
 
 class HostTargetDelegate;
 
-/**
- * See https://web.dev/articles/inp#good-score.
- */
-enum class InteractionResponsivenessScore : int32_t {
-  Good = 0,
-  NeedsImprovement = 1,
-  Poor = 2
-};
-
-struct LongTaskPayload {
-  uint16_t startTime;
-  uint16_t duration;
-  InteractionResponsivenessScore responsivenessScore;
-  uint16_t ttl;
-};
-
-struct PerfMonitorUpdateRequest {
-  LongTaskPayload activeInteraction;
+struct PerfIssuePayload {
+  std::string name;
+  std::optional<std::string> severity;
+  std::optional<std::string> description;
+  std::optional<std::string> learnMoreUrl;
 };
 
 /**
@@ -41,19 +27,15 @@ struct PerfMonitorUpdateRequest {
  */
 class PerfMonitorUpdateHandler {
  public:
-  explicit PerfMonitorUpdateHandler(HostTargetDelegate& delegate)
-      : delegate_(delegate) {}
+  explicit PerfMonitorUpdateHandler(HostTargetDelegate &delegate) : delegate_(delegate) {}
 
   /**
-   * Handle a new "__chromium_devtools_metrics_reporter" message.
+   * Handle a new "__react_native_perf_issues_reporter" message.
    */
-  void handlePerfMetricsUpdate(const std::string& message);
+  void handlePerfIssueAdded(const std::string &message);
 
  private:
-  HostTargetDelegate& delegate_;
-  std::optional<LongTaskPayload> lastEvent_;
-
-  bool shouldOverrideLastEvent(const LongTaskPayload& newInteraction);
+  HostTargetDelegate &delegate_;
 };
 
 } // namespace facebook::react::jsinspector_modern

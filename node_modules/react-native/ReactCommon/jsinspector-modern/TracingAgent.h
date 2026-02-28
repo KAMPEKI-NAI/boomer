@@ -11,6 +11,7 @@
 #include "InspectorInterfaces.h"
 
 #include <jsinspector-modern/cdp/CdpJson.h>
+#include <jsinspector-modern/tracing/HostTracingProfile.h>
 #include <jsinspector-modern/tracing/Timing.h>
 #include <react/timing/primitives.h>
 
@@ -28,14 +29,8 @@ class TracingAgent {
    * \param hostTargetController An interface to the HostTarget that this agent
    * is attached to. The caller is responsible for ensuring that the
    * HostTargetDelegate and underlying HostTarget both outlive the agent.
-   * \param traceRecordingToEmit If set, this is the trace that Host has
-   * requested to display in the Frontend.
    */
-  TracingAgent(
-      FrontendChannel frontendChannel,
-      SessionState& sessionState,
-      HostTargetController& hostTargetController,
-      std::optional<tracing::TraceRecordingState> traceRecordingToEmit);
+  TracingAgent(FrontendChannel frontendChannel, SessionState &sessionState, HostTargetController &hostTargetController);
 
   ~TracingAgent();
 
@@ -44,7 +39,12 @@ class TracingAgent {
    * \c FrontendChannel synchronously or asynchronously.
    * \param req The parsed request.
    */
-  bool handleRequest(const cdp::PreparsedRequest& req);
+  bool handleRequest(const cdp::PreparsedRequest &req);
+
+  /**
+   * Emits the HostTracingProfile that was stashed externally by the HostTarget.
+   */
+  void emitExternalHostTracingProfile(tracing::HostTracingProfile tracingProfile) const;
 
  private:
   /**
@@ -52,15 +52,15 @@ class TracingAgent {
    */
   FrontendChannel frontendChannel_;
 
-  SessionState& sessionState_;
+  SessionState &sessionState_;
 
-  HostTargetController& hostTargetController_;
+  HostTargetController &hostTargetController_;
 
   /**
-   * Emits the captured Trace Recording state in a series of
+   * Emits captured HostTracingProfile in a series of
    * Tracing.dataCollected events, followed by a Tracing.tracingComplete event.
    */
-  void emitTraceRecording(tracing::TraceRecordingState state) const;
+  void emitHostTracingProfile(tracing::HostTracingProfile tracingProfile) const;
 };
 
 } // namespace facebook::react::jsinspector_modern
