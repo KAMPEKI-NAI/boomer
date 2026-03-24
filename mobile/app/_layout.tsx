@@ -1,5 +1,5 @@
-import { ClerkProvider } from "@clerk/clerk-expo";
-import { tokenCache } from "@clerk/clerk-expo/token-cache";
+import { ClerkProvider } from "@clerk/expo";
+import { tokenCache } from "@clerk/expo/token-cache";
 import { Slot } from "expo-router"; // 🛑 FIX: Use Slot instead of Stack here
 import "../global.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
