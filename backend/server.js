@@ -4,17 +4,17 @@ import { Server } from "socket.io";
 import cors from "cors";
 import { clerkMiddleware } from "@clerk/express";
 
-import userRoutes from "./routes/user.route.js";
-import postRoutes from "./routes/post.route.js";
-import commentRoutes from "./routes/comment.route.js";
-import notificationRoutes from "./routes/notification.route.js";
-import searchRoutes from "./routes/search.route.js";
-import messageRoutes from "./routes/messages.route.js";
+import userRoutes from "./src/routes/user.route.js";
+import postRoutes from "./src/routes/post.route.js";
+import commentRoutes from "./src/routes/comment.route.js";
+import notificationRoutes from "./src/routes/notification.route.js";
+import searchRoutes from "./src/routes/search.route.js";
+import messageRoutes from "./src/routes/messages.route.js";
 
-import { ENV } from "./config/env.js";
-import connectDB from "./config/db.js";
-import { arcjetMiddleware } from "./middleware/arcjet.middleware.js";
-import { socketAuthMiddleware } from "./middleware/socket.auth.middleware.js"; // your updated Clerk socket middleware
+import { ENV } from "./src/config/env.js";
+import connectDB from "./src/config/db.js";
+import { arcjetMiddleware } from "./src/middleware/arcjet.middleware.js";
+import { socketAuthMiddleware } from "./src/middleware/socket.auth.middleware.js"; // your updated Clerk socket middleware
 
 const app = express();
 const server = http.createServer(app);
