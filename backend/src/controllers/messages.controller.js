@@ -1,120 +1,108 @@
-// controllers/messages.controller.js
-import Message from "../Models/messages.model.js";
-import User from "../Models/user.model.js"; // Import User model
-import { getAuth } from "@clerk/express";
+import cloudinary from "../lib/cloudinary.js";
+import { getReceiverSocketId, io } from "../lib/socket.js";
+import Message from "../Models/messages.js";
+import User from "../Models/user.model.js";
 
-// Send a message
-export const sendMessage = async (req, res) => {
-  const { userId } = getAuth(req);
-  const { receiverId, text } = req.body;
-
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  if (!receiverId || !text) {
-    return res.status(400).json({ error: "receiverId and text are required" });
-  }
-
-  const message = await Message.create({
-    senderId: userId,
-    receiverId,
-    text,
-  });
-
-  res.status(201).json(message);
-};
-
-// Get conversation between logged-in user & another user
-export const getConversation = async (req, res) => {
-  const { userId } = getAuth(req);
-  const { otherUserId } = req.params;
-
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  const messages = await Message.find({
-    $or: [
-      { senderId: userId, receiverId: otherUserId },
-      { senderId: otherUserId, receiverId: userId },
-    ],
-  }).sort({ createdAt: 1 });
-
-  res.json(messages);
-};
-
-// Get all conversations
-export const getAllConversations = async (req, res) => {
-  const { userId } = getAuth(req);
-
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
+export const getAllContacts = async (req, res) => {
   try {
+    const loggedInUserId = req.user._id;
+    const filteredUsers = await User.find({ _id: { $ne: loggedInUserId } }).select("-password");
+
+    res.status(200).json(filteredUsers);
+  } catch (error) {
+    console.log("Error in getAllContacts:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getMessagesByUserId = async (req, res) => {
+  try {
+    const myId = req.user._id;
+    const { id: userToChatId } = req.params;
+
     const messages = await Message.find({
-      $or: [{ senderId: userId }, { receiverId: userId }],
-    }).sort({ createdAt: -1 });
-
-    const conversationsMap = new Map();
-
-    messages.forEach((message) => {
-      const otherUser =
-        message.senderId === userId
-          ? message.receiverId
-          : message.senderId;
-
-      if (!conversationsMap.has(otherUser)) {
-        conversationsMap.set(otherUser, {
-          userId: otherUser,
-          lastMessage: message.text,
-          lastMessageDate: message.createdAt,
-        });
-      }
+      $or: [
+        { senderId: myId, receiverId: userToChatId },
+        { senderId: userToChatId, receiverId: myId },
+      ],
     });
 
-    const conversations = Array.from(conversationsMap.values());
-    res.json(conversations);
+    res.status(200).json(messages);
   } catch (error) {
-    res.status(500).json({ error: "Server error" });
+    console.log("Error in getMessages controller: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
-// Search users
-export const searchUsers = async (req, res) => {
-  const { query } = req.query;
-
+export const sendMessage = async (req, res) => {
   try {
-    const users = await User.find({
-      name: { $regex: query, $options: "i" },
-    }).limit(10);
+    const { text, image } = req.body;
+    const { id: receiverId } = req.params;
+    const senderId = req.user._id;
 
-    res.json(users);
+    if (!text && !image) {
+      return res.status(400).json({ message: "Text or image is required." });
+    }
+    if (senderId.equals(receiverId)) {
+      return res.status(400).json({ message: "Cannot send messages to yourself." });
+    }
+    const receiverExists = await User.exists({ _id: receiverId });
+    if (!receiverExists) {
+      return res.status(404).json({ message: "Receiver not found." });
+    }
+
+    let imageUrl;
+    if (image) {
+      // upload base64 image to cloudinary
+      const uploadResponse = await cloudinary.uploader.upload(image);
+      imageUrl = uploadResponse.secure_url;
+    }
+
+    const newMessage = new Message({
+      senderId,
+      receiverId,
+      text,
+      image: imageUrl,
+    });
+
+    await newMessage.save();
+
+    const receiverSocketId = getReceiverSocketId(receiverId);
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("newMessage", newMessage);
+    }
+
+    res.status(201).json(newMessage);
   } catch (error) {
-    res.status(500).json({ error: "Server error" });
+    console.log("Error in sendMessage controller: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
-// Delete a message
-export const deleteMessage = async (req, res) => {
-  const { userId } = getAuth(req);
-  const { messageId } = req.params;
+export const getChatPartners = async (req, res) => {
+  try {
+    const loggedInUserId = req.user._id;
 
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized" });
+    // find all the messages where the logged-in user is either sender or receiver
+    const messages = await Message.find({
+      $or: [{ senderId: loggedInUserId }, { receiverId: loggedInUserId }],
+    });
+
+    const chatPartnerIds = [
+      ...new Set(
+        messages.map((msg) =>
+          msg.senderId.toString() === loggedInUserId.toString()
+            ? msg.receiverId.toString()
+            : msg.senderId.toString()
+        )
+      ),
+    ];
+
+    const chatPartners = await User.find({ _id: { $in: chatPartnerIds } }).select("-password");
+
+    res.status(200).json(chatPartners);
+  } catch (error) {
+    console.error("Error in getChatPartners: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
   }
-
-  const message = await Message.findById(messageId);
-
-  if (!message) {
-    return res.status(404).json({ error: "Message not found" });
-  }
-
-  if (message.senderId !== userId) {
-    return res.status(403).json({ error: "Not allowed" });
-  }
-
-  await message.deleteOne();
-  res.json({ success: true });
 };
