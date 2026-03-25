@@ -1,6 +1,6 @@
 import { verifyToken } from "@clerk/backend";
-import { ENV } from "../lib/env.js";
-import User from "../models/User.js";   // keep this if you still need extra user data from DB
+import { ENV } from "../config/env.js";
+import User from "../Models/user.model.js";   // keep this if you still need extra user data from DB
 
 export const socketAuthMiddleware = async (socket, next) => {
   try {
