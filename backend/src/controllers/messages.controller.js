@@ -1,4 +1,4 @@
-import cloudinary from "../lib/cloudinary.js";
+import cloudinary from "../config/cloudinary.js";
 import { getReceiverSocketId, io } from "../lib/socket.js";
 import Message from "../Models/messages.js";
 import User from "../Models/user.model.js";
