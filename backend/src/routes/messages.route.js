@@ -7,12 +7,12 @@ import {
 } from "../controllers/messages.controller.js";
 
 import { protectRoute } from "../middleware/auth.middleware.js";
-// import { arcjetProtection } from "../middleware/arcjet.middleware.js";   // ← Comment this out for now
+// import { arcjetMiddleware } from "../middleware/arcjet.middleware.js";   // ← Temporarily disabled
 
 const router = express.Router();
 
-// Remove arcjetProtection from these routes for now
-router.use(protectRoute);        // Only use authentication
+// Only use authentication (Clerk). Skip Arcjet for now to stop "Bot access denied"
+router.use(protectRoute);
 
 router.get("/contacts", getAllContacts);
 router.get("/chats", getChatPartners);
