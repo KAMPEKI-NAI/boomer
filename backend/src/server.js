@@ -15,7 +15,7 @@ import webhookRoutes from "./routes/webhook.route.js";
 import { ENV } from "./config/env.js";
 import connectDB from "./config/db.js";
 import { arcjetMiddleware } from "./middleware/arcjet.middleware.js";
-import { socketAuthMiddleware } from "./middleware/socket.auth.middleware.js"; // your updated Clerk socket middleware
+import { socketAuthMiddleware } from "./middleware/socket.auth.middleware.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -23,34 +23,38 @@ const server = http.createServer(app);
 // ====================== SOCKET.IO SETUP ======================
 const io = new Server(server, {
   cors: {
-    origin: "*",                    // ← We'll tighten this later
+    origin: "*", 
     methods: ["GET", "POST"],
     credentials: true,
   },
 });
 
-// Apply socket authentication
 io.use(socketAuthMiddleware);
 
-// Your existing socket connection logic here
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.userId);
+  console.log(`User connected: ${socket.userId || "unknown"}`);
 
-  // ... your online users map, joinChat, disconnect, etc.
+  socket.on("joinChat", ({ chatPartnerId }) => {
+    if (chatPartnerId && socket.userId) {
+      const roomId = [socket.userId, chatPartnerId].sort().join("_");
+      socket.join(roomId);
+      console.log(`User ${socket.userId} joined room ${roomId}`);
+    }
+  });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.userId);
+    console.log(`User disconnected: ${socket.userId}`);
   });
 });
 
-// ====================== EXPRESS MIDDLEWARES ======================
+// ====================== MIDDLEWARES ======================
 app.use(cors());
 app.use(express.json());
 
-// Public routes (no auth)
+// Public routes
 app.use("/api/search", searchRoutes);
 
-// Clerk + Arcjet for HTTP routes
+// Clerk + Arcjet
 app.use(clerkMiddleware());
 app.use(arcjetMiddleware);
 
@@ -60,16 +64,21 @@ app.use("/api/posts", postRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/messages", messageRoutes);
-app.use("/api/webhook", webhookRoutes); // Webhook route doesn't require auth, but we can add Arcjet for rate limiting if desired
+
+// Webhook route (important: NO clerkMiddleware or protectRoute)
+app.use("/api/webhooks", webhookRoutes);
 
 // Health check
 app.get("/", (req, res) => {
-  res.send("Boomer Chat Backend is running ✅");
+  res.status(200).json({ 
+    status: "ok", 
+    message: "Boomer Chat Backend is running ✅" 
+  });
 });
 
-// Error handler
+// Global error handler
 app.use((err, req, res, next) => {
-  console.error(err);
+  console.error("Unhandled error:", err);
   res.status(500).json({ error: err.message || "Internal Server Error" });
 });
 
@@ -91,4 +100,5 @@ const startServer = async () => {
 
 startServer();
 
-export { io, app, server };  
+// ✅ IMPORTANT: Default export for Render
+export default app;
