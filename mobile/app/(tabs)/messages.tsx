@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/expo";
 import io, { Socket } from "socket.io-client";
 
-const API_URL = "http://192.168.212.116:3000";   // Change to your Render URL later
+const API_URL = "https://boomer-k9z3.onrender.com";   // Change to your Render URL later
 
 const MessagesScreen = () => {
   const { userId, getToken, isSignedIn } = useAuth();
@@ -48,9 +48,12 @@ const MessagesScreen = () => {
 
       socketRef.current.on("newMessage", (message: any) => {
         // Only add if it's for the currently open chat
-        if (selectedConversation && 
-            (message.senderId === selectedConversation.userId || 
-             message.receiverId === selectedConversation.userId)) {
+        const partnerId = selectedConversation?.userId || selectedConversation?._id;
+
+        if (
+          message.senderId === partnerId ||
+          message.receiverId === partnerId
+        ) {
           setMessages((prev) => [...prev, message]);
         }
       });
@@ -79,8 +82,12 @@ const MessagesScreen = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!res.ok) throw new Error("Failed to load conversations");
       const data = await res.json();
+
+      if (!res.ok) {
+        console.log("SERVER ERROR:", data);
+        throw new Error(data.message || "Request failed");
+      }
       setConversations(data);
     } catch (error) {
       console.error("Error loading conversations:", error);
