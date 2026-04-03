@@ -226,7 +226,7 @@ const SearchScreen = () => {
 
         {!isLoading && hasSearched && searchResults.length === 0 && (
           <Text className="text-center text-gray-500 mt-6">
-            {'No results found for "{searchQuery}"'}
+            {`No results for "${searchQuery}"`}
           </Text>
         )}
 

@@ -11,7 +11,7 @@ export default function Index() {
           {/* DEMO IMAGE */}
           <View className="items-center">
             <Image
-              source={require("../../assets/images/boomer.png")}
+              source={require("../../assets/images/icon.png")}
               className="size-96"
               resizeMode="contain"
             />
