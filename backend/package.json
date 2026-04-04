@@ -7,6 +7,7 @@
     "@arcjet/inspect": "^1.3.0",
     "@arcjet/node": "^1.3.0",
     "@clerk/backend": "^3.2.2",
+    "@clerk/clerk-sdk-node": "^4.13.23",
     "@clerk/express": "^2.0.6",
     "accepts": "^2.0.0",
     "append-field": "^1.0.0",

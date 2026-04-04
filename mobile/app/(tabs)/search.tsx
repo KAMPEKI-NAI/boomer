@@ -123,9 +123,10 @@ const SearchScreen = () => {
       setSearchResults(results);
 
       setIsLoading(false);
-    }, 400); // 400ms debounce
+    }, 400);
   };
 
+  // Add unique keys for nested elements in TopicItem
   const TopicItem = ({
     text,
     onPress,
@@ -145,6 +146,7 @@ const SearchScreen = () => {
     </View>
   );
 
+  // Fix: Add unique keys to all mapped elements in ResultItem
   const ResultItem = ({ item }: { item: SearchResultItem }) => {
     const isUser = item.type === "user";
     const user = isUser ? (item.data as User) : (item.data as PostData).author;
@@ -211,12 +213,13 @@ const SearchScreen = () => {
               {`Results for "${searchQuery}"`}
             </Text>
 
-            {searchResults.map((item) => (
+            {searchResults.map((item, index) => (
               <ResultItem
+                // Use a more unique key combining index with id to ensure uniqueness
                 key={
                   item.type === "user"
-                    ? (item.data as User).id
-                    : (item.data as PostData).id
+                    ? `user-${(item.data as User).id}-${index}`
+                    : `post-${(item.data as PostData).id}-${index}`
                 }
                 item={item}
               />
@@ -234,9 +237,10 @@ const SearchScreen = () => {
           <View className="p-4">
             <Text className="text-xl font-bold mb-4">Recent searches</Text>
 
-            {recentSearches.map((item) => (
+            {recentSearches.map((item, index) => (
               <TopicItem
-                key={item}
+                // Add index to ensure unique keys (though text should be unique)
+                key={`recent-${item}-${index}`}
                 text={item}
                 onPress={() => handleSearch(item)}
                 onDelete={() => deleteRecentSearch(item)}
