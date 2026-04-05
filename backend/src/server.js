@@ -5,6 +5,7 @@ import cors from "cors";
 import { clerkMiddleware } from "@clerk/express";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 
 import userRoutes from "./routes/user.route.js";
 import postRoutes from "./routes/post.route.js";
@@ -33,7 +34,6 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
     credentials: true,
   },
-  // Socket.IO options to prevent timeout
   pingTimeout: 60000,
   pingInterval: 25000,
   transports: ['websocket', 'polling'],
@@ -69,7 +69,6 @@ io.on("connection", (socket) => {
   socket.on("sendMessage", async ({ conversationId, message, replyTo }, callback) => {
     try {
       // Save message to database using your message routes
-      // You'll need to import your Message model or make an API call
       const savedMessage = {
         id: Date.now().toString(),
         conversationId,
@@ -110,7 +109,6 @@ io.on("connection", (socket) => {
   // Mark messages as read
   socket.on("markRead", async ({ conversationId, messageId }) => {
     try {
-      // Update read status in database here
       io.to(conversationId).emit("messagesRead", {
         conversationId,
         userId: socket.userId,
@@ -141,15 +139,32 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files from uploads directory
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-// Create uploads directory if it doesn't exist
-import fs from "fs";
-if (!fs.existsSync(path.join(__dirname, "uploads"))) {
-  fs.mkdirSync(path.join(__dirname, "uploads"), { recursive: true });
+// ====================== CREATE UPLOADS DIRECTORY ======================
+// Use /tmp on Render (writable), or local directory for development
+let uploadsDir;
+if (process.env.NODE_ENV === 'production') {
+  uploadsDir = path.join('/tmp', 'uploads');
+} else {
+  uploadsDir = path.join(process.cwd(), 'uploads');
 }
 
+// Create uploads directory if it doesn't exist
+if (!fs.existsSync(uploadsDir)) {
+  try {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    console.log(`✅ Uploads directory created at: ${uploadsDir}`);
+  } catch (error) {
+    console.error(`❌ Failed to create uploads directory: ${error.message}`);
+    console.log('⚠️ File uploads will not work, but server will continue');
+  }
+}
+
+// Serve static files from uploads directory if it exists
+if (fs.existsSync(uploadsDir)) {
+  app.use("/uploads", express.static(uploadsDir));
+}
+
+// ====================== ROUTES ======================
 // Public routes (no authentication)
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/search", searchRoutes);
@@ -179,8 +194,29 @@ app.get("/", (req, res) => {
 app.get("/socket-status", (req, res) => {
   res.json({
     connectedClients: io.engine.clientsCount,
-    status: "running"
+    status: "running",
+    timestamp: new Date().toISOString()
   });
+});
+
+// Database status check
+app.get("/api/db-status", async (req, res) => {
+  try {
+    const mongoose = await import('mongoose');
+    const dbStatus = mongoose.default.connection.readyState;
+    const status = {
+      0: 'disconnected',
+      1: 'connected',
+      2: 'connecting',
+      3: 'disconnecting'
+    };
+    res.json({ 
+      database: status[dbStatus] || 'unknown',
+      readyState: dbStatus
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Global error handler
@@ -207,7 +243,7 @@ const startServer = async () => {
     
     server.listen(PORT, "0.0.0.0", () => {
       console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📁 Uploads directory: ${path.join(__dirname, "uploads")}`);
+      console.log(`📁 Uploads directory: ${uploadsDir}`);
       console.log(`🔌 Socket.io ready for connections`);
       console.log(`🌐 Health check: http://localhost:${PORT}/`);
     });
