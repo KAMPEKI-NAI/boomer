@@ -1,9 +1,6 @@
 // services/userService.ts
 import { useAuth, useUser } from "@clerk/expo";
-
-
-const API_BASE_URL = 'https://boomer-k9z3.onrender.com'; 
-
+import { API_CONFIG } from "../config/api.config";
 
 export const useUserService = () => {
   const { getToken } = useAuth();
@@ -12,7 +9,7 @@ export const useUserService = () => {
   const getCurrentUser = async () => {
     try {
       const token = await getToken();
-      const response = await fetch(`${API_BASE_URL}/api/users/me`, {
+      const response = await fetch(`${API_CONFIG.apiUrl}/users/me`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -39,7 +36,7 @@ export const useUserService = () => {
         return createUserFromClerk();
       }
       
-      const response = await fetch(`${API_BASE_URL}/api/users/sync`, {
+      const response = await fetch(`${API_CONFIG.apiUrl}/users/sync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
