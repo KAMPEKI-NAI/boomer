@@ -1,296 +1,60 @@
-import asyncHandler from "express-async-handler";
-import User from "../Models/user.model.js";
-import Notification from "../Models/notification.model.js";
+// models/User.js
+import mongoose from 'mongoose';
 
-import { getAuth } from "@clerk/express";
-import { clerkClient } from "@clerk/express";
-
-export const getUserProfile = asyncHandler(async (req, res) => {
-  const { username } = req.params;
-  const user = await User.findOne({ username });
-  if (!user) return res.status(404).json({ error: "User not found" });
-
-  res.status(200).json({ user });
+const userSchema = new mongoose.Schema({
+  clerkId: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  name: {
+    type: String,
+    default: '',
+  },
+  firstName: {
+    type: String,
+    default: '',
+  },
+  lastName: {
+    type: String,
+    default: '',
+  },
+  username: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
+  email: {
+    type: String,
+    default: '',
+  },
+  profilePicture: {
+    type: String,
+    default: 'https://via.placeholder.com/150',
+  },
+  bannerImage: {
+    type: String,
+    default: '',
+  },
+  bio: {
+    type: String,
+    default: '',
+  },
+  location: {
+    type: String,
+    default: '',
+  },
+  followers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  }],
+  following: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  }],
+}, {
+  timestamps: true,
 });
 
-export const updateProfile = asyncHandler(async (req, res) => {
-  const { userId } = getAuth(req);
-
-  const user = await User.findOneAndUpdate({ clerkId: userId }, req.body, { new: true });
-
-  if (!user) return res.status(404).json({ error: "User not found" });
-
-  res.status(200).json({ user });
-});
-
-export const getAllUsers = async (req, res) => {
-  const { userId } = getAuth(req);
-
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  try {
-    const users = await User.find({
-      clerkId: { $ne: userId },
-    }).select("clerkId username avatar");
-
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ error: "Server error" });
-  }
-};
-
-export const syncUser = asyncHandler(async (req, res) => {
-  const { userId } = getAuth(req);
-
-  // check if user already exists in mongodb
-  const existingUser = await User.findOne({ clerkId: userId });
-  if (existingUser) {
-    return res.status(200).json({ user: existingUser, message: "User already exists" });
-  }
-
-  // create new user from Clerk data
-  const clerkUser = await clerkClient.users.getUser(userId);
-
-  const userData = {
-    clerkId: userId,
-    email: clerkUser.emailAddresses[0].emailAddress,
-    firstName: clerkUser.firstName || "",
-    lastName: clerkUser.lastName || "",
-    username: clerkUser.emailAddresses[0].emailAddress.split("@")[0],
-    profilePicture: clerkUser.imageUrl || "",
-  };
-
-  const user = await User.create(userData);
-
-  res.status(201).json({ user, message: "User created successfully" });
-});
-
-export const getCurrentUser = asyncHandler(async (req, res) => {
-  const { userId } = getAuth(req);
-  const user = await User.findOne({ clerkId: userId });
-
-  if (!user) return res.status(404).json({ error: "User not found" });
-
-  res.status(200).json({ user });
-});
-
-export const followUser = asyncHandler(async (req, res) => {
-  const { userId } = getAuth(req);
-  const { targetUserId } = req.params;
-
-  if (userId === targetUserId) return res.status(400).json({ error: "You cannot follow yourself" });
-
-  const currentUser = await User.findOne({ clerkId: userId });
-  const targetUser = await User.findById(targetUserId);
-
-  if (!currentUser || !targetUser) return res.status(404).json({ error: "User not found" });
-
-  const isFollowing = currentUser.following.includes(targetUserId);
-
-  if (isFollowing) {
-    // unfollow
-    await User.findByIdAndUpdate(currentUser._id, {
-      $pull: { following: targetUserId },
-    });
-    await User.findByIdAndUpdate(targetUserId, {
-      $pull: { followers: currentUser._id },
-    });
-  } else {
-    // follow
-    await User.findByIdAndUpdate(currentUser._id, {
-      $push: { following: targetUserId },
-    });
-    await User.findByIdAndUpdate(targetUserId, {
-      $push: { followers: currentUser._id },
-    });
-
-    
-    // create notification
-    await Notification.create({
-      from: currentUser._id,
-      to: targetUserId,
-      type: "follow",
-    });
-  }
-
-  res.status(200).json({
-    message: isFollowing ? "User unfollowed successfully" : "User followed successfully",
-  });
-});
-
-
-export const searchUsers = async (req, res) => {
-  try {
-    const query = req.query.q || "";
-
-    if (!query.trim()) return res.json([]);
-
-    const results = await User.aggregate([
-      {
-        $search: {
-          index: "h-search", 
-          compound: {
-            should: [
-              {
-                autocomplete: {
-                  query,
-                  path: "firstName"
-                }
-              },
-              {
-                autocomplete: {
-                  query,
-                  path: "lastName"
-                }
-              },
-              {
-                autocomplete: {
-                  query,
-                  path: "username"
-                }
-              }
-            ]
-          }
-        }
-      },
-      { $limit: 20 },
-      {
-        $project: {
-          _id: 1,
-          username: 1,
-          firstName: 1,
-          lastName: 1,
-          profilePicture: 1
-        }
-      }
-    ]);
-
-    res.json(results);
-  } catch (err) {
-    console.error("Search error:", err);
-    res.status(500).json({ error: "Search failed" });
-  }
-};
-
-// Get user by ID
-export const getUserById = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    const user = await User.findById(userId)
-      .select("-__v")
-      .populate("followers", "name username profilePicture verified")
-      .populate("following", "name username profilePicture verified");
-    
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-    
-    res.json(user);
-  } catch (error) {
-    console.error("Get user by ID error:", error);
-    res.status(500).json({ error: error.message });
-  }
-};
-
-// Get followers
-export const getFollowers = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    const user = await User.findById(userId)
-      .populate("followers", "name username profilePicture verified bio");
-    
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-    
-    res.json(user.followers);
-  } catch (error) {
-    console.error("Get followers error:", error);
-    res.status(500).json({ error: error.message });
-  }
-};
-
-// Get following
-export const getFollowing = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    const user = await User.findById(userId)
-      .populate("following", "name username profilePicture verified bio");
-    
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-    
-    res.json(user.following);
-  } catch (error) {
-    console.error("Get following error:", error);
-    res.status(500).json({ error: error.message });
-  }
-};
-
-// Upload profile picture
-export const uploadProfilePicture = async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
-    }
-    
-    const userId = req.user._id || req.userId;
-    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
-    
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { profilePicture: fileUrl },
-      { new: true }
-    );
-    
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-    
-    res.json({ 
-      success: true, 
-      url: fileUrl,
-      message: "Profile picture updated successfully" 
-    });
-  } catch (error) {
-    console.error("Upload profile picture error:", error);
-    res.status(500).json({ error: error.message });
-  }
-};
-
-// Upload banner image
-export const uploadBannerImage = async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
-    }
-    
-    const userId = req.user._id || req.userId;
-    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
-    
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { bannerImage: fileUrl },
-      { new: true }
-    );
-    
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-    
-    res.json({ 
-      success: true, 
-      url: fileUrl,
-      message: "Banner image updated successfully" 
-    });
-  } catch (error) {
-    console.error("Upload banner image error:", error);
-    res.status(500).json({ error: error.message });
-  }
-};
+const User = mongoose.model('User', userSchema);
+export default User;

@@ -39,6 +39,11 @@ interface SearchResultItem {
 
 /* ===================== API CALL ===================== */
 
+// app/(tabs)/search.tsx - Update the fetchSearchResultsFromDB function
+
+// At the top of the file
+const API_BASE_URL = 'https://boomer-k9z3.onrender.com'; // Replace with your Render URL
+
 const fetchSearchResultsFromDB = async (
   query: string,
   token?: string | null
@@ -53,31 +58,84 @@ const fetchSearchResultsFromDB = async (
     }
 
     const res = await fetch(
-      `https://boomer-two.vercel.app/api/search?q=${encodeURIComponent(
-        query
-      )}`,
+      `${API_BASE_URL}/api/search?q=${encodeURIComponent(query)}`,
       { headers }
     );
 
-    if (!res.ok) throw new Error("Search failed");
+    if (!res.ok) {
+      return [];
+    }
 
     const data = await res.json();
-
     const results: SearchResultItem[] = [];
 
-    data.users?.forEach((user: User) => {
-      results.push({ type: "user", data: user });
-    });
+    if (data.users && Array.isArray(data.users)) {
+      data.users.forEach((user: User) => {
+        results.push({ type: "user", data: user });
+      });
+    }
 
-    data.posts?.forEach((post: PostData) => {
-      results.push({ type: "post", data: post });
-    });
+    if (data.posts && Array.isArray(data.posts)) {
+      data.posts.forEach((post: PostData) => {
+        results.push({ type: "post", data: post });
+      });
+    }
 
     return results;
   } catch (error) {
     console.error("Search error:", error);
     return [];
   }
+};
+
+// Mock data for testing when API fails
+const getMockSearchResults = (query: string): SearchResultItem[] => {
+  const mockUsers: User[] = [
+    {
+      id: "1",
+      name: "John Doe",
+      username: "johndoe",
+      profilePicture: "https://randomuser.me/api/portraits/men/1.jpg",
+      verified: true,
+      bio: "Software engineer",
+    },
+    {
+      id: "2",
+      name: "Jane Smith",
+      username: "janesmith",
+      profilePicture: "https://randomuser.me/api/portraits/women/1.jpg",
+      verified: false,
+      bio: "Product designer",
+    },
+  ];
+
+  const mockPosts: PostData[] = [
+    {
+      id: "1",
+      text: `Check out this amazing post about ${query}!`,
+      createdAt: new Date().toISOString(),
+      author: mockUsers[0],
+    },
+  ];
+
+  const results: SearchResultItem[] = [];
+  
+  // Add mock users
+  mockUsers.forEach(user => {
+    if (user.name.toLowerCase().includes(query.toLowerCase()) || 
+        user.username.toLowerCase().includes(query.toLowerCase())) {
+      results.push({ type: "user", data: user });
+    }
+  });
+  
+  // Add mock posts
+  mockPosts.forEach(post => {
+    if (post.text.toLowerCase().includes(query.toLowerCase())) {
+      results.push({ type: "post", data: post });
+    }
+  });
+  
+  return results;
 };
 
 /* ===================== COMPONENT ===================== */
@@ -228,7 +286,7 @@ const SearchScreen = () => {
               <TouchableOpacity 
                 className="bg-blue-500 px-3 py-1 rounded-full mr-2"
                 onPress={() => router.push({
-                  pathname: "/(tabs)/view-user",
+                  pathname: "/(screens)/view-user",
                   params: { id: user.id }
                 })}
               >
