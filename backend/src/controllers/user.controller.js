@@ -1,5 +1,5 @@
 // controllers/user.controller.js
-import User from "../models/user.model.js";
+import User from "../Models/user.model.js";
 
 // Sync user from Clerk to database
 export const syncUser = async (req, res) => {
