@@ -173,3 +173,124 @@ export const searchUsers = async (req, res) => {
     res.status(500).json({ error: "Search failed" });
   }
 };
+
+// Get user by ID
+export const getUserById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const user = await User.findById(userId)
+      .select("-__v")
+      .populate("followers", "name username profilePicture verified")
+      .populate("following", "name username profilePicture verified");
+    
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    res.json(user);
+  } catch (error) {
+    console.error("Get user by ID error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get followers
+export const getFollowers = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const user = await User.findById(userId)
+      .populate("followers", "name username profilePicture verified bio");
+    
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    res.json(user.followers);
+  } catch (error) {
+    console.error("Get followers error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get following
+export const getFollowing = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const user = await User.findById(userId)
+      .populate("following", "name username profilePicture verified bio");
+    
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    res.json(user.following);
+  } catch (error) {
+    console.error("Get following error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Upload profile picture
+export const uploadProfilePicture = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    
+    const userId = req.user._id || req.userId;
+    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { profilePicture: fileUrl },
+      { new: true }
+    );
+    
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    res.json({ 
+      success: true, 
+      url: fileUrl,
+      message: "Profile picture updated successfully" 
+    });
+  } catch (error) {
+    console.error("Upload profile picture error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Upload banner image
+export const uploadBannerImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    
+    const userId = req.user._id || req.userId;
+    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { bannerImage: fileUrl },
+      { new: true }
+    );
+    
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    res.json({ 
+      success: true, 
+      url: fileUrl,
+      message: "Banner image updated successfully" 
+    });
+  } catch (error) {
+    console.error("Upload banner image error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
