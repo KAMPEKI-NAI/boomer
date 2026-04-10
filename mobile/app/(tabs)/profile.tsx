@@ -17,10 +17,11 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import * as ImagePicker from "expo-image-picker";
+import * as ImagePicker from 'expo-image-picker';
 import { useState } from "react";
 import { useAuth } from "@clerk/expo";
 import { router } from "expo-router";
+import { API_CONFIG } from "@/config/api.config";
 
 const ProfileScreens = () => {
   const { currentUser, isLoading, refetch: refetchUser } = useCurrentUser();
@@ -55,7 +56,7 @@ const ProfileScreens = () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, // Use MediaTypeOptions
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -76,7 +77,7 @@ const ProfileScreens = () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, // Use MediaTypeOptions
       allowsEditing: true,
       aspect: [16, 9],
       quality: 0.8,
@@ -100,7 +101,7 @@ const ProfileScreens = () => {
         type: 'image/jpeg',
       });
 
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/users/profile-picture`, {
+      const response = await fetch(`${API_CONFIG.apiUrl}/users/profile-picture`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -113,6 +114,8 @@ const ProfileScreens = () => {
         await refetchProfile();
         Alert.alert('Success', 'Profile picture updated!');
       } else {
+        const error = await response.text();
+        console.error('Upload failed:', error);
         throw new Error('Upload failed');
       }
     } catch (error) {
@@ -136,7 +139,7 @@ const ProfileScreens = () => {
         type: 'image/jpeg',
       });
 
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/users/banner-image`, {
+      const response = await fetch(`${API_CONFIG.apiUrl}/users/banner-image`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -149,6 +152,8 @@ const ProfileScreens = () => {
         await refetchProfile();
         Alert.alert('Success', 'Banner image updated!');
       } else {
+        const error = await response.text();
+        console.error('Upload failed:', error);
         throw new Error('Upload failed');
       }
     } catch (error) {
@@ -159,7 +164,7 @@ const ProfileScreens = () => {
     }
   };
 
-    const navigateToFollowers = () => {
+  const navigateToFollowers = () => {
     router.push({
       pathname: "/(screens)/followers",
       params: { userId: currentUser?.id, type: 'followers' }

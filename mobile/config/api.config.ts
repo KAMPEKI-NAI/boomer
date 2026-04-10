@@ -1,11 +1,7 @@
-
-
-
+// config/api.config.ts
 export const API_CONFIG = {
-  // For production (Render)
+  // Your Render backend URL
   baseUrl: 'https://boomer-k9z3.onrender.com',
-  
- 
   
   get apiUrl() {
     return `${this.baseUrl}/api`;
