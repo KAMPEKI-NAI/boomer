@@ -4,6 +4,7 @@ import { Feather } from "@expo/vector-icons";
 import { useState, useEffect } from "react";
 import { useLocalSearchParams, router } from "expo-router";
 import { useAuth } from "@clerk/expo";
+import { API_CONFIG } from "@/config/api.config";
 
 interface UserProfile {
   id: string;
@@ -37,7 +38,7 @@ export default function ViewUserScreen() {
     try {
       const token = await getToken();
       const response = await fetch(
-        `https://boomer-two.vercel.app/api/users/by-id/${id}`,
+        `${API_CONFIG.apiUrl}/users/by-id/${id}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -56,7 +57,7 @@ export default function ViewUserScreen() {
     try {
       const token = await getToken();
       const response = await fetch(
-        `https://boomer-two.vercel.app/api/users/follow/${id}`,
+        `${API_CONFIG.apiUrl}/users/follow/${id}`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
