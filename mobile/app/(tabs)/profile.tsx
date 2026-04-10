@@ -21,7 +21,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { useState } from "react";
 import { useAuth } from "@clerk/expo";
 import { router } from "expo-router";
-import { API_CONFIG } from "@/config/api.config";
 
 const ProfileScreens = () => {
   const { currentUser, isLoading, refetch: refetchUser } = useCurrentUser();
@@ -46,7 +45,7 @@ const ProfileScreens = () => {
     refetch: refetchProfile,
   } = useProfile();
 
-  // Handle profile picture upload
+  // NEW: Profile picture upload
   const handleProfilePictureUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
@@ -56,18 +55,50 @@ const ProfileScreens = () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, // Use MediaTypeOptions
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
     });
 
     if (!result.canceled) {
-      await uploadProfilePicture(result.assets[0].uri);
+      setUploading(true);
+      try {
+        const token = await getToken();
+        const formData = new FormData();
+        
+        // @ts-ignore
+        formData.append('file', {
+          uri: result.assets[0].uri,
+          name: 'profile.jpg',
+          type: 'image/jpeg',
+        });
+
+        const response = await fetch('https://boomer-k9z3.onrender.com/api/users/profile-picture', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        if (response.ok) {
+          await refetchUser();
+          await refetchProfile();
+          Alert.alert('Success', 'Profile picture updated!');
+        } else {
+          throw new Error('Upload failed');
+        }
+      } catch (error) {
+        console.error('Upload error:', error);
+        Alert.alert('Error', 'Failed to upload profile picture');
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
-  // Handle banner image upload
+  // NEW: Banner upload
   const handleBannerUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
@@ -77,93 +108,50 @@ const ProfileScreens = () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, // Use MediaTypeOptions
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [16, 9],
       quality: 0.8,
     });
 
     if (!result.canceled) {
-      await uploadBannerImage(result.assets[0].uri);
-    }
-  };
+      setUploading(true);
+      try {
+        const token = await getToken();
+        const formData = new FormData();
+        
+        // @ts-ignore
+        formData.append('file', {
+          uri: result.assets[0].uri,
+          name: 'banner.jpg',
+          type: 'image/jpeg',
+        });
 
-  const uploadProfilePicture = async (uri: string) => {
-    setUploading(true);
-    try {
-      const token = await getToken();
-      const formData = new FormData();
-      
-      // @ts-ignore
-      formData.append('file', {
-        uri,
-        name: 'profile.jpg',
-        type: 'image/jpeg',
-      });
+        const response = await fetch('https://boomer-k9z3.onrender.com/api/users/banner-image', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formData,
+        });
 
-      const response = await fetch(`${API_CONFIG.apiUrl}/users/profile-picture`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      if (response.ok) {
-        await refetchUser();
-        await refetchProfile();
-        Alert.alert('Success', 'Profile picture updated!');
-      } else {
-        const error = await response.text();
-        console.error('Upload failed:', error);
-        throw new Error('Upload failed');
+        if (response.ok) {
+          await refetchUser();
+          await refetchProfile();
+          Alert.alert('Success', 'Banner image updated!');
+        } else {
+          throw new Error('Upload failed');
+        }
+      } catch (error) {
+        console.error('Upload error:', error);
+        Alert.alert('Error', 'Failed to upload banner image');
+      } finally {
+        setUploading(false);
       }
-    } catch (error) {
-      console.error('Upload error:', error);
-      Alert.alert('Error', 'Failed to upload profile picture');
-    } finally {
-      setUploading(false);
     }
   };
 
-  const uploadBannerImage = async (uri: string) => {
-    setUploading(true);
-    try {
-      const token = await getToken();
-      const formData = new FormData();
-      
-      // @ts-ignore
-      formData.append('file', {
-        uri,
-        name: 'banner.jpg',
-        type: 'image/jpeg',
-      });
-
-      const response = await fetch(`${API_CONFIG.apiUrl}/users/banner-image`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      if (response.ok) {
-        await refetchUser();
-        await refetchProfile();
-        Alert.alert('Success', 'Banner image updated!');
-      } else {
-        const error = await response.text();
-        console.error('Upload failed:', error);
-        throw new Error('Upload failed');
-      }
-    } catch (error) {
-      console.error('Upload error:', error);
-      Alert.alert('Error', 'Failed to upload banner image');
-    } finally {
-      setUploading(false);
-    }
-  };
-
+  // NEW: Navigate to followers/following
   const navigateToFollowers = () => {
     router.push({
       pathname: "/(screens)/followers",
@@ -215,7 +203,7 @@ const ProfileScreens = () => {
           />
         }
       >
-        {/* Banner Image with Upload Option */}
+        {/* Banner Image - Now tappable */}
         <TouchableOpacity onPress={handleBannerUpload} activeOpacity={0.8}>
           <View className="relative">
             <Image
@@ -241,7 +229,7 @@ const ProfileScreens = () => {
 
         <View className="px-4 pb-4 border-b border-gray-100">
           <View className="flex-row justify-between items-end -mt-16 mb-4">
-            {/* Profile Picture with Upload Option */}
+            {/* Profile Picture - Now tappable */}
             <TouchableOpacity onPress={handleProfilePictureUpload}>
               <View className="relative">
                 <Image
@@ -267,27 +255,24 @@ const ProfileScreens = () => {
               <Text className="text-xl font-bold text-gray-900 mr-1">
                 {currentUser?.firstName} {currentUser?.lastName}
               </Text>
-              {currentUser?.verified && (
-                <Feather name="check-circle" size={20} color="#1DA1F2" />
-              )}
+              <Feather name="check-circle" size={20} color="#1DA1F2" />
             </View>
             <Text className="text-gray-500 mb-2">@{currentUser?.username}</Text>
             <Text className="text-gray-900 mb-3">{currentUser?.bio}</Text>
 
-            {currentUser?.location && (
-              <View className="flex-row items-center mb-2">
-                <Feather name="map-pin" size={16} color="#657786" />
-                <Text className="text-gray-500 ml-2">{currentUser.location}</Text>
-              </View>
-            )}
+            <View className="flex-row items-center mb-2">
+              <Feather name="map-pin" size={16} color="#657786" />
+              <Text className="text-gray-500 ml-2">{currentUser?.location}</Text>
+            </View>
 
             <View className="flex-row items-center mb-3">
               <Feather name="calendar" size={16} color="#657786" />
               <Text className="text-gray-500 ml-2">
-                Joined {format(new Date(currentUser?.createdAt || Date.now()), "MMMM yyyy")}
+                Joined {format(new Date(currentUser?.createdAt), "MMMM yyyy")}
               </Text>
             </View>
 
+            {/* Followers/Following - Now tappable */}
             <View className="flex-row">
               <TouchableOpacity className="mr-6" onPress={navigateToFollowing}>
                 <Text className="text-gray-900">

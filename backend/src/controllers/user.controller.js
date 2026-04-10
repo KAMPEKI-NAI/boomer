@@ -162,7 +162,7 @@ export const updateProfile = async (req, res) => {
 // Follow a user
 export const followUser = async (req, res) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = await getUserIdFromRequest(req);
     const { targetUserId } = req.params;
     
     if (!clerkId) {

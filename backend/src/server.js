@@ -19,6 +19,7 @@ import { ENV } from "./config/env.js";
 import connectDB from "./config/db.js";
 import { arcjetMiddleware } from "./middleware/arcjet.middleware.js";
 import { socketAuthMiddleware } from "./middleware/socket.auth.middleware.js";
+import { clerkClient } from "@clerk/clerk-sdk-node";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -51,6 +52,28 @@ io.on("connection", (socket) => {
     status: 'connected', 
     userId: socket.userId,
     timestamp: new Date().toISOString()
+  });
+
+  // Handle token refresh
+  socket.on("refreshToken", async ({ token }) => {
+    try {
+      // Verify the new token
+      const session = await clerkClient.sessions.verifySession({
+        sessionId: token
+      });
+      
+      if (session && session.userId === socket.userId) {
+        // Update socket auth
+        socket.handshake.auth.token = token;
+        socket.emit("tokenRefreshed", { success: true });
+        console.log(`✅ Token refreshed for user: ${socket.userId}`);
+      } else {
+        socket.emit("tokenRefreshed", { success: false, error: "Invalid token" });
+      }
+    } catch (error) {
+      console.error("Token refresh failed:", error);
+      socket.emit("tokenRefreshed", { success: false, error: error.message });
+    }
   });
 
   // Join a conversation room (1-on-1 chat)
@@ -135,9 +158,25 @@ io.on("connection", (socket) => {
 });
 
 // ====================== MIDDLEWARES ======================
+// ====================== MIDDLEWARES ======================
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ✅ FIX: Configure Clerk middleware correctly
+app.use(clerkMiddleware({
+  // This ensures the user ID is attached to req.auth
+  publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+  secretKey: process.env.CLERK_SECRET_KEY,
+}));
+
+// Add debug middleware to check auth
+app.use((req, res, next) => {
+  console.log('🔍 Auth check for:', req.path);
+  console.log('  req.auth:', req.auth ? 'present' : 'missing');
+  console.log('  req.auth.userId:', req.auth?.userId || 'not set');
+  next();
+});
 
 // ====================== CREATE UPLOADS DIRECTORY ======================
 // Use /tmp on Render (writable), or local directory for development
@@ -229,6 +268,7 @@ app.use((err, req, res, next) => {
 });
 
 // 404 handler for undefined routes
+// ✅ Fixed: No wildcard path needed
 app.use((req, res) => {
   res.status(404).json({ error: `Route ${req.originalUrl} not found` });
 });
