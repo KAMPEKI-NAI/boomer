@@ -13,14 +13,16 @@ import {
   uploadProfilePicture,
   uploadBannerImage,
 } from "../controllers/user.controller.js";
-import { protectRoute } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/");
+    const uploadDir = process.env.NODE_ENV === 'production' 
+      ? '/tmp/uploads' 
+      : 'uploads';
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
@@ -42,35 +44,24 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: fileFilter,
 });
 
 // Public routes
 router.get("/profile/:username", getUserProfile);
-router.get("/by-id/:userId", getUserById); // Get user by ID
-router.get("/:userId/followers", getFollowers); // Get user's followers
-router.get("/:userId/following", getFollowing); // Get user's following
+router.get("/by-id/:userId", getUserById);
+router.get("/:userId/followers", getFollowers);
+router.get("/:userId/following", getFollowing);
 
 // Protected routes
-router.post("/sync", protectRoute, syncUser);
-router.get("/me", protectRoute, getCurrentUser);
-router.put("/profile", protectRoute, updateProfile);
-router.post("/follow/:targetUserId", protectRoute, followUser);
+router.post("/sync", syncUser);
+router.get("/me", getCurrentUser);
+router.put("/profile", updateProfile);
+router.post("/follow/:targetUserId", followUser);
 
 // Profile picture upload routes
-router.post(
-  "/profile-picture",
-  protectRoute,
-  upload.single("file"),
-  uploadProfilePicture
-);
-
-router.post(
-  "/banner-image",
-  protectRoute,
-  upload.single("file"),
-  uploadBannerImage
-);
+router.post("/profile-picture", upload.single("file"), uploadProfilePicture);
+router.post("/banner-image", upload.single("file"), uploadBannerImage);
 
 export default router;

@@ -57,13 +57,11 @@ io.on("connection", (socket) => {
   // Handle token refresh
   socket.on("refreshToken", async ({ token }) => {
     try {
-      // Verify the new token
       const session = await clerkClient.sessions.verifySession({
         sessionId: token
       });
       
       if (session && session.userId === socket.userId) {
-        // Update socket auth
         socket.handshake.auth.token = token;
         socket.emit("tokenRefreshed", { success: true });
         console.log(`✅ Token refreshed for user: ${socket.userId}`);
@@ -76,14 +74,12 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Join a conversation room (1-on-1 chat)
+  // Join a conversation room
   socket.on("joinChat", ({ chatPartnerId }) => {
     if (chatPartnerId && socket.userId) {
       const roomId = [socket.userId, chatPartnerId].sort().join("_");
       socket.join(roomId);
       console.log(`📱 User ${socket.userId} joined room ${roomId}`);
-      
-      // Notify that user has joined
       socket.to(roomId).emit("userJoined", { userId: socket.userId });
     }
   });
@@ -91,7 +87,6 @@ io.on("connection", (socket) => {
   // Send a real-time message
   socket.on("sendMessage", async ({ conversationId, message, replyTo }, callback) => {
     try {
-      // Save message to database using your message routes
       const savedMessage = {
         id: Date.now().toString(),
         conversationId,
@@ -102,13 +97,11 @@ io.on("connection", (socket) => {
         status: "sent"
       };
       
-      // Emit to the specific conversation room
       io.to(conversationId).emit("newMessage", {
         ...savedMessage,
         conversationId
       });
       
-      // Acknowledge to sender
       if (callback) {
         callback({ success: true, message: savedMessage });
       }
@@ -143,34 +136,20 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Leave conversation room
-  socket.on("leaveChat", ({ chatPartnerId }) => {
-    if (chatPartnerId && socket.userId) {
-      const roomId = [socket.userId, chatPartnerId].sort().join("_");
-      socket.leave(roomId);
-      console.log(`👋 User ${socket.userId} left room ${roomId}`);
-    }
-  });
-
   socket.on("disconnect", () => {
     console.log(`❌ User disconnected: ${socket.userId}`);
   });
 });
 
 // ====================== MIDDLEWARES ======================
-// ====================== MIDDLEWARES ======================
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ FIX: Configure Clerk middleware correctly
-app.use(clerkMiddleware({
-  // This ensures the user ID is attached to req.auth
-  publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
-  secretKey: process.env.CLERK_SECRET_KEY,
-}));
+// Clerk middleware
+app.use(clerkMiddleware());
 
-// Add debug middleware to check auth
+// Debug middleware
 app.use((req, res, next) => {
   console.log('🔍 Auth check for:', req.path);
   console.log('  req.auth:', req.auth ? 'present' : 'missing');
@@ -179,7 +158,6 @@ app.use((req, res, next) => {
 });
 
 // ====================== CREATE UPLOADS DIRECTORY ======================
-// Use /tmp on Render (writable), or local directory for development
 let uploadsDir;
 if (process.env.NODE_ENV === 'production') {
   uploadsDir = path.join('/tmp', 'uploads');
@@ -187,90 +165,47 @@ if (process.env.NODE_ENV === 'production') {
   uploadsDir = path.join(process.cwd(), 'uploads');
 }
 
-// Create uploads directory if it doesn't exist
 if (!fs.existsSync(uploadsDir)) {
   try {
     fs.mkdirSync(uploadsDir, { recursive: true });
     console.log(`✅ Uploads directory created at: ${uploadsDir}`);
   } catch (error) {
     console.error(`❌ Failed to create uploads directory: ${error.message}`);
-    console.log('⚠️ File uploads will not work, but server will continue');
   }
 }
 
-// Serve static files from uploads directory if it exists
 if (fs.existsSync(uploadsDir)) {
   app.use("/uploads", express.static(uploadsDir));
 }
 
 // ====================== ROUTES ======================
-// Public routes (no authentication)
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/search", searchRoutes);
-
-// Clerk + Arcjet middleware (applies to all routes after this point)
-app.use(clerkMiddleware());
 app.use(arcjetMiddleware);
-
-// Protected routes (require authentication)
 app.use("/api/users", userRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/messages", messageRoutes);
 
-// Health check endpoint
+// Health check
 app.get("/", (req, res) => {
   res.status(200).json({ 
     status: "ok", 
     message: "Boomer Chat Backend is running ✅",
-    timestamp: new Date().toISOString(),
-    socketIO: io.engine.clientsCount > 0 ? "active" : "waiting for connections"
-  });
-});
-
-// Socket.IO health check
-app.get("/socket-status", (req, res) => {
-  res.json({
-    connectedClients: io.engine.clientsCount,
-    status: "running",
     timestamp: new Date().toISOString()
   });
 });
 
-// Database status check
-app.get("/api/db-status", async (req, res) => {
-  try {
-    const mongoose = await import('mongoose');
-    const dbStatus = mongoose.default.connection.readyState;
-    const status = {
-      0: 'disconnected',
-      1: 'connected',
-      2: 'connecting',
-      3: 'disconnecting'
-    };
-    res.json({ 
-      database: status[dbStatus] || 'unknown',
-      readyState: dbStatus
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: `Route ${req.originalUrl} not found` });
 });
 
 // Global error handler
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
-  res.status(err.status || 500).json({ 
-    error: err.message || "Internal Server Error",
-    stack: process.env.NODE_ENV === "development" ? err.stack : undefined
-  });
-});
-
-// 404 handler for undefined routes
-// ✅ Fixed: No wildcard path needed
-app.use((req, res) => {
-  res.status(404).json({ error: `Route ${req.originalUrl} not found` });
+  res.status(500).json({ error: err.message || "Internal Server Error" });
 });
 
 // ====================== START SERVER ======================
@@ -285,7 +220,6 @@ const startServer = async () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📁 Uploads directory: ${uploadsDir}`);
       console.log(`🔌 Socket.io ready for connections`);
-      console.log(`🌐 Health check: http://localhost:${PORT}/`);
     });
   } catch (error) {
     console.error("Failed to start server:", error);
@@ -295,28 +229,4 @@ const startServer = async () => {
 
 startServer();
 
-// Graceful shutdown
-process.on("SIGINT", () => {
-  console.log("SIGINT received, shutting down gracefully");
-  io.close(() => {
-    console.log("Socket.IO server closed");
-    server.close(() => {
-      console.log("HTTP server closed");
-      process.exit(0);
-    });
-  });
-});
-
-process.on("SIGTERM", () => {
-  console.log("SIGTERM received, shutting down gracefully");
-  io.close(() => {
-    console.log("Socket.IO server closed");
-    server.close(() => {
-      console.log("HTTP server closed");
-      process.exit(0);
-    });
-  });
-});
-
-// ✅ IMPORTANT: Default export for Render
 export default app;

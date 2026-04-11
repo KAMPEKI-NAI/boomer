@@ -45,7 +45,6 @@ const ProfileScreens = () => {
     refetch: refetchProfile,
   } = useProfile();
 
-  // NEW: Profile picture upload
   const handleProfilePictureUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
@@ -98,7 +97,6 @@ const ProfileScreens = () => {
     }
   };
 
-  // NEW: Banner upload
   const handleBannerUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
@@ -151,7 +149,6 @@ const ProfileScreens = () => {
     }
   };
 
-  // NEW: Navigate to followers/following
   const navigateToFollowers = () => {
     router.push({
       pathname: "/(screens)/followers",
@@ -176,7 +173,6 @@ const ProfileScreens = () => {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
-      {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100">
         <View>
           <Text className="text-xl font-bold text-gray-900">
@@ -203,7 +199,6 @@ const ProfileScreens = () => {
           />
         }
       >
-        {/* Banner Image - Now tappable */}
         <TouchableOpacity onPress={handleBannerUpload} activeOpacity={0.8}>
           <View className="relative">
             <Image
@@ -229,7 +224,6 @@ const ProfileScreens = () => {
 
         <View className="px-4 pb-4 border-b border-gray-100">
           <View className="flex-row justify-between items-end -mt-16 mb-4">
-            {/* Profile Picture - Now tappable */}
             <TouchableOpacity onPress={handleProfilePictureUpload}>
               <View className="relative">
                 <Image
@@ -272,7 +266,6 @@ const ProfileScreens = () => {
               </Text>
             </View>
 
-            {/* Followers/Following - Now tappable */}
             <View className="flex-row">
               <TouchableOpacity className="mr-6" onPress={navigateToFollowing}>
                 <Text className="text-gray-900">
