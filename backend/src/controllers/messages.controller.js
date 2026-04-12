@@ -1,6 +1,6 @@
 import cloudinary from "../config/cloudinary.js";
 import { io } from "../lib/socket.js";        // we only need io, not getReceiverSocketId anymore
-import Message from "../Models/messages.js";
+import Message from "../Models/messages.model.js";
 import User from "../Models/user.model.js";
 
 export const getAllContacts = async (req, res) => {

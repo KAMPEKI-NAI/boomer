@@ -1,15 +1,19 @@
 // services/userService.ts
 import { useAuth, useUser } from "@clerk/expo";
-import { API_CONFIG } from "../config/api.config";
 
 export const useUserService = () => {
-  const { getToken } = useAuth();
+  const { getToken, isSignedIn } = useAuth();
   const { user: clerkUser } = useUser();
   
   const getCurrentUser = async () => {
     try {
       const token = await getToken();
-      const response = await fetch(`${API_CONFIG.apiUrl}/users/me`, {
+      if (!token) {
+        return createUserFromClerk();
+      }
+      
+      const response = await fetch('https://boomer-k9z3.onrender.com/api/users/me', {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -31,29 +35,36 @@ export const useUserService = () => {
   const syncUser = async () => {
     try {
       const token = await getToken();
-      
-      if (!clerkUser || !token) {
+      if (!token || !clerkUser) {
         return createUserFromClerk();
       }
       
-      const response = await fetch(`${API_CONFIG.apiUrl}/users/sync`, {
+      // Use the username from Clerk if it exists
+      const clerkUsername = clerkUser.username;
+      const finalUsername = clerkUsername && clerkUsername !== "null" && clerkUsername !== ""
+        ? clerkUsername 
+        : `${clerkUser.firstName?.toLowerCase() || "user"}${Math.floor(Math.random() * 1000)}`;
+      
+      const requestBody = {
+        id: clerkUser.id,
+        firstName: clerkUser.firstName || "",
+        lastName: clerkUser.lastName || "",
+        email: clerkUser.emailAddresses?.[0]?.emailAddress || "",
+        username: finalUsername,
+        profilePicture: clerkUser.imageUrl || "https://via.placeholder.com/150",
+      };
+      
+      const response = await fetch('https://boomer-k9z3.onrender.com/api/users/sync', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          id: clerkUser.id,
-          firstName: clerkUser.firstName || "",
-          lastName: clerkUser.lastName || "",
-          email: clerkUser.emailAddresses?.[0]?.emailAddress || "",
-          username: clerkUser.username || clerkUser.id,
-          profilePicture: clerkUser.imageUrl || "https://via.placeholder.com/150",
-        }),
+        body: JSON.stringify(requestBody),
       });
       
       if (!response.ok) {
-        throw new Error(`Sync failed: ${response.status}`);
+        return createUserFromClerk();
       }
       
       return await response.json();
@@ -64,13 +75,19 @@ export const useUserService = () => {
   };
   
   const createUserFromClerk = () => {
+    const clerkUsername = clerkUser?.username;
+    const finalUsername = clerkUsername && clerkUsername !== "null" && clerkUsername !== ""
+      ? clerkUsername 
+      : `${clerkUser?.firstName?.toLowerCase() || "user"}${Math.floor(Math.random() * 1000)}`;
+    
     return {
       id: clerkUser?.id,
       clerkId: clerkUser?.id,
+      _id: clerkUser?.id,
       name: `${clerkUser?.firstName || ''} ${clerkUser?.lastName || ''}`.trim(),
       firstName: clerkUser?.firstName || '',
       lastName: clerkUser?.lastName || '',
-      username: clerkUser?.username || clerkUser?.id,
+      username: finalUsername,
       email: clerkUser?.emailAddresses?.[0]?.emailAddress || '',
       profilePicture: clerkUser?.imageUrl || 'https://via.placeholder.com/150',
       bannerImage: '',

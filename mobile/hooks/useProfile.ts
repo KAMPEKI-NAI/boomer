@@ -1,58 +1,84 @@
+// hooks/useProfile.ts
 import { useState } from "react";
-import { Alert } from "react-native";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useApiClient, userApi } from "../utils/api";
+import { useAuth } from "@clerk/expo";
 import { useCurrentUser } from "./useCurrentUser";
 
-export const useProfile = () => {
-  const api = useApiClient();
+const API_URL = 'https://boomer-k9z3.onrender.com/api';
 
-  const queryClient = useQueryClient();
+export const useProfile = () => {
+  const { getToken } = useAuth();
+  const { currentUser, refetch: refetchUser } = useCurrentUser();
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
+    name: "",
     bio: "",
     location: "",
-  });
-  const { currentUser } = useCurrentUser();
-
-  const updateProfileMutation = useMutation({
-    mutationFn: (profileData: any) => userApi.updateProfile(api, profileData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["authUser"] });
-      setIsEditModalVisible(false);
-      Alert.alert("Success", "Profile updated successfully!");
-    },
-    onError: (error: any) => {
-      Alert.alert("Error", error.response?.data?.error || "Failed to update profile");
-    },
+    username: "",
   });
 
   const openEditModal = () => {
-    if (currentUser) {
-      setFormData({
-        firstName: currentUser.firstName || "",
-        lastName: currentUser.lastName || "",
-        bio: currentUser.bio || "",
-        location: currentUser.location || "",
-      });
-    }
+    setFormData({
+      name: currentUser?.name || "",
+      bio: currentUser?.bio || "",
+      location: currentUser?.location || "",
+      username: currentUser?.username || "",
+    });
     setIsEditModalVisible(true);
+  };
+
+  const closeEditModal = () => {
+    setIsEditModalVisible(false);
   };
 
   const updateFormField = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const saveProfile = async () => {
+    setIsUpdating(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("No authentication token available");
+      }
+      
+      const response = await fetch(`${API_URL}/users/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Update failed: ${response.status}`);
+      }
+      
+      await refetchUser();
+      closeEditModal();
+      alert("Profile updated successfully!");
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      alert("Failed to update profile. Please try again.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const refetch = () => {
+    refetchUser();
+  };
+
   return {
     isEditModalVisible,
-    formData,
     openEditModal,
-    closeEditModal: () => setIsEditModalVisible(false),
-    saveProfile: () => updateProfileMutation.mutate(formData),
+    closeEditModal,
+    formData,
+    saveProfile,
     updateFormField,
-    isUpdating: updateProfileMutation.isPending,
-    refetch: () => queryClient.invalidateQueries({ queryKey: ["authUser"] }),
+    isUpdating,
+    refetch,
   };
 };

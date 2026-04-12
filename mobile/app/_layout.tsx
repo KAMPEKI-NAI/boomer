@@ -7,20 +7,19 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { socketService } from "../services/socketService";
-import { API_CONFIG } from "../config/api.config";
 
 const queryClient = new QueryClient();
 
-// Component to initialize socket
 function SocketInitializer() {
-  const { getToken, userId } = useAuth();
+  const { getToken, userId, isSignedIn } = useAuth();
   const { user } = useUser();
 
   useEffect(() => {
     const initSocket = async () => {
-      if (userId && user) {
-        // Pass getToken function to socket service
+      if (isSignedIn && userId && user) {
+        // Pass the getToken function, not the token itself
         await socketService.connect(userId, getToken);
+        console.log("Socket initialized with getToken function");
       }
     };
     
@@ -29,7 +28,7 @@ function SocketInitializer() {
     return () => {
       socketService.disconnect();
     };
-  }, [userId, user, getToken]);
+  }, [isSignedIn, userId, user, getToken]);
 
   return null;
 }

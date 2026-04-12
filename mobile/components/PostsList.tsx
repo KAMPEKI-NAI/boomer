@@ -1,6 +1,6 @@
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { usePosts } from "@/hooks/usePosts";
-import { Post } from "@/types";
+import { Post } from "@/types/index";
 import { View, Text, ActivityIndicator, TouchableOpacity } from "react-native";
 import PostCard from "./PostCard";
 import { useState } from "react";
@@ -34,7 +34,7 @@ const PostsList = ({ username }: { username?: string }) => {
     );
   }
 
-  if (posts.length === 0) {
+  if (!posts || posts.length === 0) {
     return (
       <View className="p-8 items-center">
         <Text className="text-gray-500">No posts yet</Text>

@@ -14,6 +14,9 @@ import notificationRoutes from "./routes/notification.route.js";
 import searchRoutes from "./routes/search.route.js";
 import messageRoutes from "./routes/messages.route.js";
 import webhookRoutes from "./routes/webhook.route.js";
+import Message from './Models/messages.model.js';
+import Conversation from './Models/conversations.model.js';
+
 
 import { ENV } from "./config/env.js";
 import connectDB from "./config/db.js";
@@ -47,69 +50,103 @@ io.use(socketAuthMiddleware);
 io.on("connection", (socket) => {
   console.log(`✅ User connected: ${socket.userId || "unknown"}`);
   
-  // Send acknowledgment on successful connection
   socket.emit('connection_ack', { 
     status: 'connected', 
     userId: socket.userId,
     timestamp: new Date().toISOString()
   });
 
-  // Handle token refresh
-  socket.on("refreshToken", async ({ token }) => {
-    try {
-      const session = await clerkClient.sessions.verifySession({
-        sessionId: token
-      });
+  // Join conversation room
+  socket.on("joinConversation", async ({ conversationId }) => {
+    if (conversationId && socket.userId) {
+      socket.join(conversationId);
+      console.log(`📱 User ${socket.userId} joined conversation ${conversationId}`);
       
-      if (session && session.userId === socket.userId) {
-        socket.handshake.auth.token = token;
-        socket.emit("tokenRefreshed", { success: true });
-        console.log(`✅ Token refreshed for user: ${socket.userId}`);
-      } else {
-        socket.emit("tokenRefreshed", { success: false, error: "Invalid token" });
-      }
-    } catch (error) {
-      console.error("Token refresh failed:", error);
-      socket.emit("tokenRefreshed", { success: false, error: error.message });
-    }
-  });
-
-  // Join a conversation room
-  socket.on("joinChat", ({ chatPartnerId }) => {
-    if (chatPartnerId && socket.userId) {
-      const roomId = [socket.userId, chatPartnerId].sort().join("_");
-      socket.join(roomId);
-      console.log(`📱 User ${socket.userId} joined room ${roomId}`);
-      socket.to(roomId).emit("userJoined", { userId: socket.userId });
+      // Mark messages as read when user joins
+      await Message.updateMany(
+        { conversationId, receiverId: socket.userId, read: false },
+        { read: true, readAt: new Date() }
+      );
+      
+      // Emit read receipts
+      socket.to(conversationId).emit("messagesRead", {
+        conversationId,
+        userId: socket.userId,
+        timestamp: new Date().toISOString()
+      });
     }
   });
 
   // Send a real-time message
-  socket.on("sendMessage", async ({ conversationId, message, replyTo }, callback) => {
+  socket.on("sendMessage", async ({ conversationId, content, replyTo }, callback) => {
     try {
-      const savedMessage = {
-        id: Date.now().toString(),
-        conversationId,
-        content: message,
-        senderId: socket.userId,
-        replyTo: replyTo || null,
-        timestamp: new Date().toISOString(),
-        status: "sent"
-      };
+      if (!conversationId || !content || !socket.userId) {
+        throw new Error("Missing required fields");
+      }
       
-      io.to(conversationId).emit("newMessage", {
-        ...savedMessage,
-        conversationId
+      // Get conversation to find receiver
+      const conversation = await Conversation.findById(conversationId);
+      if (!conversation) {
+        throw new Error("Conversation not found");
+      }
+      
+      const receiverId = conversation.participants.find(p => p !== socket.userId);
+      if (!receiverId) {
+        throw new Error("Receiver not found");
+      }
+      
+      // Save message to database
+      const message = await Message.create({
+        conversationId,
+        senderId: socket.userId,
+        receiverId,
+        content,
+        replyTo: replyTo || null,
+        read: false,
       });
       
+      // Update conversation last message
+      await Conversation.findByIdAndUpdate(conversationId, {
+        lastMessage: content,
+        lastMessageAt: new Date(),
+        $inc: { [`unreadCount.${receiverId}`]: 1 }
+      });
+      
+      // Emit to the specific conversation room
+      io.to(conversationId).emit("newMessage", {
+        ...message.toObject(),
+        fromUser: false,
+      });
+      
+      // Acknowledge to sender
       if (callback) {
-        callback({ success: true, message: savedMessage });
+        callback({ success: true, message: { ...message.toObject(), fromUser: true } });
       }
     } catch (error) {
       console.error("Error sending message:", error);
       if (callback) {
         callback({ success: false, error: error.message });
       }
+    }
+  });
+
+  // Get conversation messages
+  socket.on("getMessages", async ({ conversationId, limit = 50, before }, callback) => {
+    try {
+      let query = { conversationId };
+      if (before) {
+        query.createdAt = { $lt: before };
+      }
+      
+      const messages = await Message.find(query)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+      
+      callback({ success: true, messages: messages.reverse() });
+    } catch (error) {
+      console.error("Error getting messages:", error);
+      callback({ success: false, error: error.message });
     }
   });
 
@@ -125,6 +162,15 @@ io.on("connection", (socket) => {
   // Mark messages as read
   socket.on("markRead", async ({ conversationId, messageId }) => {
     try {
+      await Message.updateMany(
+        { conversationId, receiverId: socket.userId, read: false },
+        { read: true, readAt: new Date() }
+      );
+      
+      await Conversation.findByIdAndUpdate(conversationId, {
+        $set: { [`unreadCount.${socket.userId}`]: 0 }
+      });
+      
       io.to(conversationId).emit("messagesRead", {
         conversationId,
         userId: socket.userId,
@@ -140,7 +186,6 @@ io.on("connection", (socket) => {
     console.log(`❌ User disconnected: ${socket.userId}`);
   });
 });
-
 // ====================== MIDDLEWARES ======================
 app.use(cors());
 app.use(express.json());
@@ -149,11 +194,15 @@ app.use(express.urlencoded({ extended: true }));
 // Clerk middleware
 app.use(clerkMiddleware());
 
+
 // Debug middleware
+
 app.use((req, res, next) => {
-  console.log('🔍 Auth check for:', req.path);
-  console.log('  req.auth:', req.auth ? 'present' : 'missing');
-  console.log('  req.auth.userId:', req.auth?.userId || 'not set');
+  console.log(`🔐 Auth check for ${req.method} ${req.path}`);
+  console.log(`   Authorization header: ${req.headers.authorization ? "Present" : "Missing"}`);
+  if (req.auth) {
+    console.log(`   req.auth.userId: ${req.auth.userId || "Not set"}`);
+  }
   next();
 });
 

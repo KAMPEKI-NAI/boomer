@@ -1,4 +1,4 @@
-import { Post, User } from "@/types";
+import { Post, User } from "@/types/index";
 import { formatDate, formatNumber } from "@/utils/formatters";
 import { AntDesign, Feather } from "@expo/vector-icons";
 import { View, Text, Alert, Image, TouchableOpacity } from "react-native";
@@ -13,6 +13,9 @@ interface PostCardProps {
 }
 
 const PostCard = ({ currentUser, onDelete, onLike, post, isLiked, onComment }: PostCardProps) => {
+  if (!post || !post.user._id) {
+    return null;
+  }
   const isOwnPost = post.user._id === currentUser._id;
 
   const handleDelete = () => {
