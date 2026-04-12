@@ -1,5 +1,5 @@
 // backend/src/controllers/user.controller.js
-import User from '../models/User.js';
+import User from '../Models/user.model.js';
 
 // Helper function to get user ID from request
 function getUserIdFromRequest(req) {
