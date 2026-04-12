@@ -21,7 +21,6 @@ import connectDB from "./config/db.js";
 import { arcjetMiddleware } from "./middleware/arcjet.middleware.js";
 import { socketAuthMiddleware } from "./middleware/socket.auth.middleware.js";
 
-// Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -38,23 +37,19 @@ const io = new Server(server, {
   pingTimeout: 60000,
   pingInterval: 25000,
   transports: ['websocket', 'polling'],
-  allowEIO3: true,
 });
 
-// Socket authentication middleware
 io.use(socketAuthMiddleware);
 
 io.on("connection", (socket) => {
   console.log(`✅ User connected: ${socket.userId || "unknown"}`);
   
-  // Send acknowledgment on successful connection
   socket.emit('connection_ack', { 
     status: 'connected', 
     userId: socket.userId,
     timestamp: new Date().toISOString()
   });
 
-  // Join a conversation room
   socket.on("joinConversation", async ({ conversationId }) => {
     if (conversationId && socket.userId) {
       socket.join(conversationId);
@@ -62,7 +57,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Send a real-time message
   socket.on("sendMessage", async ({ conversationId, content, replyTo }, callback) => {
     try {
       if (!conversationId || !content || !socket.userId) {
@@ -79,14 +73,12 @@ io.on("connection", (socket) => {
         status: "sent"
       };
       
-      // Emit to the specific conversation room
       io.to(conversationId).emit("newMessage", {
         ...savedMessage,
         fromUser: false,
         conversationId
       });
       
-      // Acknowledge to sender
       if (callback) {
         callback({ success: true, message: { ...savedMessage, fromUser: true } });
       }
@@ -98,7 +90,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Typing indicators
   socket.on("typing", ({ conversationId, isTyping }) => {
     socket.to(conversationId).emit("userTyping", {
       userId: socket.userId,
@@ -107,7 +98,6 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Mark messages as read
   socket.on("markRead", async ({ conversationId, messageId }) => {
     io.to(conversationId).emit("messagesRead", {
       conversationId,
@@ -127,14 +117,18 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Clerk middleware - THIS MUST COME BEFORE YOUR ROUTES
-app.use(clerkMiddleware());
+// ✅ FIXED: Clerk middleware with secret key
+app.use(clerkMiddleware({
+  secretKey: process.env.CLERK_SECRET_KEY,
+  publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+}));
 
 // Debug middleware to check auth
 app.use((req, res, next) => {
   console.log(`🔐 Auth check for ${req.method} ${req.path}`);
   console.log(`   Authorization header: ${req.headers.authorization ? "Present" : "Missing"}`);
-  console.log(`   req.auth.userId: ${req.auth?.userId || "Not set"}`);
+  console.log(`   req.auth: ${req.auth ? "Present" : "Missing"}`);
+  console.log(`   req.auth?.userId: ${req.auth?.userId || "Not set"}`);
   next();
 });
 
@@ -160,78 +154,42 @@ if (fs.existsSync(uploadsDir)) {
 }
 
 // ====================== ROUTES ======================
-// Public routes (no authentication)
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/search", searchRoutes);
-
-// Arcjet middleware
 app.use(arcjetMiddleware);
-
-// Protected routes (require authentication)
 app.use("/api/users", userRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/messages", messageRoutes);
 
-// Health check endpoint
+// Health check
 app.get("/", (req, res) => {
   res.status(200).json({ 
     status: "ok", 
     message: "Boomer Chat Backend is running ✅",
-    timestamp: new Date().toISOString(),
-    socketIO: io.engine.clientsCount > 0 ? "active" : "waiting for connections"
+    timestamp: new Date().toISOString()
   });
 });
 
-// Database status check
-app.get("/api/db-status", async (req, res) => {
-  try {
-    const mongoose = await import('mongoose');
-    const dbStatus = mongoose.default.connection.readyState;
-    const status = {
-      0: 'disconnected',
-      1: 'connected',
-      2: 'connecting',
-      3: 'disconnecting'
-    };
-    res.json({ 
-      database: status[dbStatus] || 'unknown',
-      readyState: dbStatus
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+// Test endpoint to check auth
+app.get("/api/auth-test", (req, res) => {
+  res.json({
+    hasAuth: !!req.auth,
+    userId: req.auth?.userId || null,
+    headers: req.headers.authorization ? "Token present" : "No token"
+  });
 });
 
-// Test user endpoint
-app.get("/api/test-user", async (req, res) => {
-  try {
-    const User = (await import('./models/User.js')).default;
-    const testUser = await User.findOne({});
-    res.json({ 
-      message: "User model working",
-      hasUsers: !!testUser,
-      userCount: await User.countDocuments()
-    });
-  } catch (error) {
-    console.error("Test user error:", error);
-    res.status(500).json({ error: error.message, stack: error.stack });
-  }
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: `Route ${req.originalUrl} not found` });
 });
 
 // Global error handler
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
-  res.status(err.status || 500).json({ 
-    error: err.message || "Internal Server Error",
-    stack: process.env.NODE_ENV === "development" ? err.stack : undefined
-  });
-});
-
-// 404 handler for undefined routes
-app.use((req, res) => {
-  res.status(404).json({ error: `Route ${req.originalUrl} not found` });
+  res.status(500).json({ error: err.message || "Internal Server Error" });
 });
 
 // ====================== START SERVER ======================
@@ -246,7 +204,6 @@ const startServer = async () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📁 Uploads directory: ${uploadsDir}`);
       console.log(`🔌 Socket.io ready for connections`);
-      console.log(`🌐 Health check: http://localhost:${PORT}/`);
     });
   } catch (error) {
     console.error("Failed to start server:", error);
@@ -256,28 +213,4 @@ const startServer = async () => {
 
 startServer();
 
-// Graceful shutdown
-process.on("SIGINT", () => {
-  console.log("SIGINT received, shutting down gracefully");
-  io.close(() => {
-    console.log("Socket.IO server closed");
-    server.close(() => {
-      console.log("HTTP server closed");
-      process.exit(0);
-    });
-  });
-});
-
-process.on("SIGTERM", () => {
-  console.log("SIGTERM received, shutting down gracefully");
-  io.close(() => {
-    console.log("Socket.IO server closed");
-    server.close(() => {
-      console.log("HTTP server closed");
-      process.exit(0);
-    });
-  });
-});
-
-// ✅ IMPORTANT: Default export for Render
 export default app;
