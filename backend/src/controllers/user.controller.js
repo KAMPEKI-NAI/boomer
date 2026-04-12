@@ -1,21 +1,17 @@
 // backend/src/controllers/user.controller.js
 import User from '../Models/user.model.js';
 
-// ✅ SIMPLIFIED: Just use what Clerk middleware already decoded
+// Helper function to get user ID from request
 function getUserIdFromRequest(req) {
-  // Clerk middleware should have already decoded the token and set this
   if (req.auth?.userId) {
-    console.log('✅ Found userId in req.auth.userId:', req.auth.userId);
     return req.auth.userId;
   }
-  
-  // Fallback for testing or if middleware didn't run
   if (req.body?.id) {
-    console.log('📝 Using userId from request body:', req.body.id);
     return req.body.id;
   }
-  
-  console.error('❌ No user ID found in request');
+  if (req.params?.userId) {
+    return req.params.userId;
+  }
   return null;
 }
 
@@ -34,7 +30,6 @@ export const syncUser = async (req, res) => {
     let user = await User.findOne({ clerkId });
     
     if (user) {
-      // Update existing user
       user = await User.findOneAndUpdate(
         { clerkId },
         {
@@ -47,9 +42,8 @@ export const syncUser = async (req, res) => {
         },
         { new: true }
       );
-      console.log("✅ User updated:", user._id);
+      console.log("User updated:", user._id);
     } else {
-      // Create new user
       user = await User.create({
         clerkId,
         name: `${firstName || ''} ${lastName || ''}`.trim(),
@@ -63,12 +57,12 @@ export const syncUser = async (req, res) => {
         followers: [],
         following: [],
       });
-      console.log("✅ User created:", user._id);
+      console.log("User created:", user._id);
     }
     
     res.status(200).json(user);
   } catch (error) {
-    console.error("❌ Sync user error:", error);
+    console.error("Sync user error:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -84,12 +78,52 @@ export const getCurrentUser = async (req, res) => {
     const user = await User.findOne({ clerkId });
     res.status(200).json({ user: user || null });
   } catch (error) {
-    console.error("❌ Get current user error:", error);
+    console.error("Get current user error:", error);
     res.status(500).json({ error: error.message });
   }
 };
 
-// Update profile
+// Get user profile by username
+export const getUserProfile = async (req, res) => {
+  try {
+    const { username } = req.params;
+    const user = await User.findOne({ username })
+      .select("-__v")
+      .populate("followers", "name username profilePicture verified")
+      .populate("following", "name username profilePicture verified");
+    
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    res.status(200).json(user);
+  } catch (error) {
+    console.error("Get user profile error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get user by ID
+export const getUserById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId)
+      .select("-__v")
+      .populate("followers", "name username profilePicture verified")
+      .populate("following", "name username profilePicture verified");
+    
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    res.status(200).json(user);
+  } catch (error) {
+    console.error("Get user by ID error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Update user profile
 export const updateProfile = async (req, res) => {
   try {
     const clerkId = getUserIdFromRequest(req);
@@ -111,7 +145,7 @@ export const updateProfile = async (req, res) => {
     
     res.status(200).json(user);
   } catch (error) {
-    console.error("❌ Update profile error:", error);
+    console.error("Update profile error:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -148,27 +182,7 @@ export const followUser = async (req, res) => {
       res.status(200).json({ message: "Followed successfully", following: true });
     }
   } catch (error) {
-    console.error("❌ Follow user error:", error);
-    res.status(500).json({ error: error.message });
-  }
-};
-
-// Get user by ID
-export const getUserById = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const user = await User.findById(userId)
-      .select("-__v")
-      .populate("followers", "name username profilePicture verified")
-      .populate("following", "name username profilePicture verified");
-    
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-    
-    res.status(200).json(user);
-  } catch (error) {
-    console.error("Get user by ID error:", error);
+    console.error("Follow user error:", error);
     res.status(500).json({ error: error.message });
   }
 };
