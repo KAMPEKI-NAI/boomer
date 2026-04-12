@@ -1,5 +1,6 @@
 // services/userService.ts
 import { useAuth, useUser } from "@clerk/expo";
+import { API_CONFIG } from "@/config/api.config";
 
 export const useUserService = () => {
   const { getToken, isSignedIn } = useAuth();
@@ -12,7 +13,7 @@ export const useUserService = () => {
         return createUserFromClerk();
       }
       
-      const response = await fetch('https://boomer-k9z3.onrender.com/api/users/me', {
+      const response = await fetch(`${API_CONFIG.apiUrl}/users/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -39,22 +40,18 @@ export const useUserService = () => {
         return createUserFromClerk();
       }
       
-      // Use the username from Clerk if it exists
-      const clerkUsername = clerkUser.username;
-      const finalUsername = clerkUsername && clerkUsername !== "null" && clerkUsername !== ""
-        ? clerkUsername 
-        : `${clerkUser.firstName?.toLowerCase() || "user"}${Math.floor(Math.random() * 1000)}`;
+      const username = clerkUser.username || `${clerkUser.firstName?.toLowerCase() || "user"}${Math.floor(Math.random() * 1000)}`;
       
       const requestBody = {
         id: clerkUser.id,
         firstName: clerkUser.firstName || "",
         lastName: clerkUser.lastName || "",
         email: clerkUser.emailAddresses?.[0]?.emailAddress || "",
-        username: finalUsername,
+        username: username,
         profilePicture: clerkUser.imageUrl || "https://via.placeholder.com/150",
       };
       
-      const response = await fetch('https://boomer-k9z3.onrender.com/api/users/sync', {
+      const response = await fetch(`${API_CONFIG.apiUrl}/users/sync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -75,10 +72,7 @@ export const useUserService = () => {
   };
   
   const createUserFromClerk = () => {
-    const clerkUsername = clerkUser?.username;
-    const finalUsername = clerkUsername && clerkUsername !== "null" && clerkUsername !== ""
-      ? clerkUsername 
-      : `${clerkUser?.firstName?.toLowerCase() || "user"}${Math.floor(Math.random() * 1000)}`;
+    const username = clerkUser?.username || `${clerkUser?.firstName?.toLowerCase() || "user"}${Math.floor(Math.random() * 1000)}`;
     
     return {
       id: clerkUser?.id,
@@ -87,7 +81,7 @@ export const useUserService = () => {
       name: `${clerkUser?.firstName || ''} ${clerkUser?.lastName || ''}`.trim(),
       firstName: clerkUser?.firstName || '',
       lastName: clerkUser?.lastName || '',
-      username: finalUsername,
+      username: username,
       email: clerkUser?.emailAddresses?.[0]?.emailAddress || '',
       profilePicture: clerkUser?.imageUrl || 'https://via.placeholder.com/150',
       bannerImage: '',

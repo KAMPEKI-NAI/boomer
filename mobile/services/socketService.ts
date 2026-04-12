@@ -5,137 +5,105 @@ import { API_CONFIG } from '@/config/api.config';
 class SocketService {
   private socket: Socket | null = null;
   private userId: string | null = null;
-  private tokenRefreshInterval: ReturnType<typeof setTimeout> | null = null; // ✅ Fixed: Use ReturnType<typeof setTimeout>
+  private connectionPromise: Promise<boolean> | null = null;
 
-  async connect(userId: string, getToken: () => Promise<string | null>) {
-    if (this.socket?.connected) {
-      console.log('Socket already connected');
-      return this.socket;
-    }
+  async connect(userId: string, getToken: () => Promise<string | null>): Promise<boolean> {
+    if (this.socket?.connected) return true;
+    if (this.connectionPromise) return this.connectionPromise;
 
-    this.userId = userId;
-    const token = await getToken();
-    
-    if (!token) {
-      console.error('No token available for socket connection');
-      return null;
-    }
-
-    console.log('Connecting to socket:', API_CONFIG.socketUrl);
-    
-    this.socket = io(API_CONFIG.socketUrl, {
-      auth: { token, userId },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-    });
-    
-    this.socket.on('connect', () => {
-      console.log('Socket connected successfully');
-      this.startTokenRefresh(getToken);
-    });
-    
-    this.socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error.message);
-    });
-    
-    this.socket.on('disconnect', (reason) => {
-      console.log('Socket disconnected:', reason);
-      this.stopTokenRefresh();
-    });
-    
-    // Handle token refresh response
-    this.socket.on('tokenRefreshed', (data) => {
-      if (data.success) {
-        console.log('Token refreshed successfully');
-      } else {
-        console.error('Token refresh failed:', data.error);
-      }
-    });
-    
-    return this.socket;
-  }
-
-  private startTokenRefresh(getToken: () => Promise<string | null>) {
-    // Refresh token every 10 minutes (before 15 min expiry)
-    this.tokenRefreshInterval = setInterval(async () => {
-      if (this.socket?.connected) {
-        const newToken = await getToken();
-        if (newToken) {
-          this.socket.emit('refreshToken', { token: newToken });
-          console.log('Token refresh requested for socket');
+    this.connectionPromise = new Promise(async (resolve) => {
+      try {
+        this.userId = userId;
+        const token = await getToken();
+        if (!token) {
+          console.error('No token');
+          this.connectionPromise = null;
+          resolve(false);
+          return;
         }
+
+        this.socket = io(API_CONFIG.socketUrl, {
+          auth: { token, userId },
+          transports: ['websocket'],
+          reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          timeout: 10000,
+        });
+
+        this.socket.on('connect', () => {
+          console.log('Socket connected');
+          this.connectionPromise = null;
+          resolve(true);
+        });
+
+        this.socket.on('connect_error', (err) => {
+          console.error('Socket error:', err.message);
+          this.connectionPromise = null;
+          resolve(false);
+        });
+
+        setTimeout(() => {
+          if (this.connectionPromise) {
+            this.connectionPromise = null;
+            resolve(false);
+          }
+        }, 10000);
+      } catch (err) {
+        this.connectionPromise = null;
+        resolve(false);
       }
-    }, 10 * 60 * 1000); // 10 minutes
+    });
+    return this.connectionPromise;
   }
 
-  private stopTokenRefresh() {
-    if (this.tokenRefreshInterval) {
-      clearInterval(this.tokenRefreshInterval);
-      this.tokenRefreshInterval = null;
-    }
+  async ensureConnected(userId: string, getToken: () => Promise<string | null>): Promise<boolean> {
+    if (this.socket?.connected) return true;
+    return this.connect(userId, getToken);
   }
 
-  disconnect() {
-    this.stopTokenRefresh();
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
+  async joinConversation(conversationId: string, userId: string, getToken: () => Promise<string | null>) {
+    const ok = await this.ensureConnected(userId, getToken);
+    if (!ok) {
+      console.warn('Cannot join: socket not connected');
+      return false;
     }
+    this.socket?.emit('joinConversation', { conversationId });
+    return true;
   }
-  
-  joinChat(chatPartnerId: string) {
-    if (!this.socket?.connected) {
-      console.warn('Socket not connected, cannot join chat');
-      return;
-    }
-    this.socket.emit('joinChat', { chatPartnerId });
-  }
-  
-  sendMessage(conversationId: string, message: string, replyTo?: string) {
+
+  async sendMessage(conversationId: string, content: string, userId: string, getToken: () => Promise<string | null>) {
+    const ok = await this.ensureConnected(userId, getToken);
+    if (!ok) throw new Error('Socket not connected');
     return new Promise((resolve, reject) => {
-      if (!this.socket?.connected) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-      
-      this.socket.emit('sendMessage', { conversationId, message, replyTo }, (response: any) => {
-        if (response?.success) {
-          resolve(response.message);
-        } else {
-          reject(response?.error || 'Failed to send message');
-        }
+      this.socket?.emit('sendMessage', { conversationId, message: content }, (response: any) => {
+        if (response?.success) resolve(response.message);
+        else reject(response?.error || 'Send failed');
       });
     });
   }
-  
+
   sendTyping(conversationId: string, isTyping: boolean) {
     if (!this.socket?.connected) return;
     this.socket.emit('typing', { conversationId, isTyping });
   }
-  
-  markAsRead(conversationId: string, messageId: string) {
-    if (!this.socket?.connected) return;
-    this.socket.emit('markRead', { conversationId, messageId });
-  }
-  
-  onNewMessage(callback: (message: any) => void) {
+
+  onNewMessage(callback: (msg: any) => void) {
     this.socket?.on('newMessage', callback);
   }
-  
-  onUserTyping(callback: (data: { userId: string; isTyping: boolean }) => void) {
+
+  onUserTyping(callback: (data: any) => void) {
     this.socket?.on('userTyping', callback);
   }
-  
-  onMessagesRead(callback: (data: { conversationId: string; userId: string; messageId: string }) => void) {
-    this.socket?.on('messagesRead', callback);
-  }
-  
+
   removeListener(event: string) {
     this.socket?.off(event);
+  }
+
+  disconnect() {
+    this.socket?.disconnect();
+    this.socket = null;
+    this.connectionPromise = null;
   }
 }
 

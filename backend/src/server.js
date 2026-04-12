@@ -28,15 +28,23 @@ const app = express();
 const server = http.createServer(app);
 
 // ====================== SOCKET.IO SETUP ======================
+// Find the Socket.IO setup and update:
 const io = new Server(server, {
   cors: {
-    origin: "*", 
+    origin: "*",
     methods: ["GET", "POST"],
     credentials: true,
   },
   pingTimeout: 60000,
   pingInterval: 25000,
   transports: ['websocket', 'polling'],
+  connectTimeout: 30000,
+  allowEIO3: true,
+});
+
+
+io.engine.on("connection_error", (err) => {
+  console.log("Connection error:", err);
 });
 
 io.use(socketAuthMiddleware);
