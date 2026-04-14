@@ -129,7 +129,9 @@ const MessagesScreen = () => {
     socketService.joinConversation(roomId, userId, getToken);
 
     const handleNewMessage = (message: any) => {
-      if (message.conversationId === selectedConversation.id) {
+      const roomId = [userId, selectedConversation.user.id].sort().join("_");
+
+      if (message.conversationId === roomId) {
         const newMsg: Message = {
           id: message.id || Date.now().toString(),
           text: message.content,
@@ -207,7 +209,9 @@ const MessagesScreen = () => {
     setNewMessage(text);
     
     if (selectedConversation && isConnected) {
-      socketService.sendTyping(selectedConversation.id, text.length > 0);
+      const roomId = [userId, selectedConversation.user.id].sort().join("_");
+
+      socketService.sendTyping(roomId, text.length > 0);
       
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(() => {
@@ -280,7 +284,9 @@ const MessagesScreen = () => {
     } finally {
       setIsSending(false);
       if (selectedConversation) {
-        socketService.sendTyping(selectedConversation.id, false);
+        const roomId = [userId, selectedConversation.user.id].sort().join("_");
+
+        socketService.sendTyping(roomId, false);
       }
     }
   };

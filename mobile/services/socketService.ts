@@ -14,6 +14,12 @@ class SocketService {
     this.connectionPromise = new Promise(async (resolve) => {
       try {
         this.userId = userId;
+
+        try {
+        await fetch(API_CONFIG.socketUrl);
+      } catch (e) {
+        console.log("Wake-up request failed (can ignore)");
+      }
         const token = await getToken();
         if (!token) {
           console.error('No token');
@@ -24,11 +30,11 @@ class SocketService {
 
         this.socket = io(API_CONFIG.socketUrl, {
           auth: { token, userId },
-          transports: ['websocket'],
+          transports: ['websocket', 'polling'],
           reconnection: true,
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
-          timeout: 10000,
+          timeout: 20000,
         });
 
         this.socket.on('connect', () => {
@@ -48,7 +54,7 @@ class SocketService {
             this.connectionPromise = null;
             resolve(false);
           }
-        }, 10000);
+        }, 20000);
       } catch (err) {
         this.connectionPromise = null;
         resolve(false);
@@ -76,7 +82,7 @@ class SocketService {
     const ok = await this.ensureConnected(userId, getToken);
     if (!ok) throw new Error('Socket not connected');
     return new Promise((resolve, reject) => {
-      this.socket?.emit('sendMessage', { conversationId, message: content }, (response: any) => {
+      this.socket?.emit('sendMessage', { conversationId, content }, (response: any) => {
         if (response?.success) resolve(response.message);
         else reject(response?.error || 'Send failed');
       });
