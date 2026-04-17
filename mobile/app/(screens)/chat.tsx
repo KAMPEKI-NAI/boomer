@@ -36,7 +36,7 @@ export default function ChatScreen() {
     const token = await getToken();
 
     const res = await fetch(
-      `${API_CONFIG.apiUrl}/messages/send/${userId}`, // ✅ FIXED ROUTE
+      `${API_CONFIG.apiUrl}/messages/send/${userId}`,
       {
         method: "POST",
         headers: {
@@ -44,10 +44,16 @@ export default function ChatScreen() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          content: newMessage.trim(), // ✅ FIXED (not receiverId)
+          content: newMessage.trim(),
         }),
       }
     );
+
+    const text = await res.text();
+
+console.log("STATUS:", res.status);
+console.log("RAW RESPONSE:", text);// ✅ FIXED ROUTE
+     
 
     const data = await res.json();
 

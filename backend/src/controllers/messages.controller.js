@@ -36,50 +36,42 @@ export const getMessagesByUserId = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
   try {
-    const { content, image } = req.body; // ✅ FIXED (was text)
+    console.log("📥 BODY:", req.body);
+    console.log("📥 PARAMS:", req.params);
+    console.log("👤 USER:", req.user);
+
+    const { content, image } = req.body;
     const { id: receiverId } = req.params;
-    const senderId = req.user._id;
+    const senderId = req.user?._id;
+
+    if (!senderId) {
+      console.log("❌ NO USER ID");
+      return res.status(401).json({ message: "Unauthorized - no user" });
+    }
 
     if (!content && !image) {
-      return res.status(400).json({ message: "Content or image is required." });
-    }
-
-    if (senderId.toString() === receiverId) {
-      return res.status(400).json({ message: "Cannot send message to yourself." });
-    }
-
-    const receiverExists = await User.exists({ _id: receiverId });
-    if (!receiverExists) {
-      return res.status(404).json({ message: "Receiver not found." });
+      console.log("❌ NO CONTENT");
+      return res.status(400).json({ message: "Content required" });
     }
 
     const conversationId = [senderId.toString(), receiverId].sort().join("_");
 
-    let imageUrl = null;
-
-    if (image) {
-      const uploadResponse = await cloudinary.uploader.upload(image, {
-        folder: "chat_images",
-      });
-      imageUrl = uploadResponse.secure_url;
-    }
-
-    const newMessage = new Message({
-      conversationId, // ✅ IMPORTANT
+    const newMessage = await Message.create({
+      conversationId,
       senderId,
       receiverId,
-      content,        // ✅ MATCHES SCHEMA
-      image: imageUrl,
+      content,
     });
 
-    await newMessage.save();
+    console.log("✅ MESSAGE CREATED:", newMessage);
 
     io.to(conversationId).emit("newMessage", newMessage);
 
     res.status(201).json(newMessage);
+
   } catch (error) {
-    console.error("Error in sendMessage:", error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("❌ SEND ERROR:", error);
+    res.status(500).json({ error: error.message });
   }
 };
 
