@@ -36,51 +36,45 @@ export const getMessagesByUserId = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
   try {
-    const { text, image } = req.body;
+    const { content, image } = req.body; // ✅ FIXED (was text)
     const { id: receiverId } = req.params;
-    const senderId = req.user._id;   // Clerk userId (make sure it's attached correctly)
+    const senderId = req.user._id;
 
-    if (!text && !image) {
-      return res.status(400).json({ message: "Text or image is required." });
+    if (!content && !image) {
+      return res.status(400).json({ message: "Content or image is required." });
     }
 
     if (senderId.toString() === receiverId) {
       return res.status(400).json({ message: "Cannot send message to yourself." });
     }
 
-    // Check if receiver exists
     const receiverExists = await User.exists({ _id: receiverId });
     if (!receiverExists) {
       return res.status(404).json({ message: "Receiver not found." });
     }
 
+    const conversationId = [senderId.toString(), receiverId].sort().join("_");
+
     let imageUrl = null;
 
-    // Upload image to Cloudinary if provided
     if (image) {
-      try {
-        const uploadResponse = await cloudinary.uploader.upload(image, {
-          folder: "chat_images",        // optional: organize images in Cloudinary
-        });
-        imageUrl = uploadResponse.secure_url;
-      } catch (uploadError) {
-        console.error("Cloudinary upload error:", uploadError);
-        return res.status(500).json({ message: "Image upload failed" });
-      }
+      const uploadResponse = await cloudinary.uploader.upload(image, {
+        folder: "chat_images",
+      });
+      imageUrl = uploadResponse.secure_url;
     }
 
     const newMessage = new Message({
+      conversationId, // ✅ IMPORTANT
       senderId,
       receiverId,
-      text: text || "",
+      content,        // ✅ MATCHES SCHEMA
       image: imageUrl,
     });
 
     await newMessage.save();
 
-    // Emit to both users using room (more reliable than single socket)
-    const roomId = [senderId.toString(), receiverId.toString()].sort().join("_");
-    io.to(roomId).emit("newMessage", newMessage);
+    io.to(conversationId).emit("newMessage", newMessage);
 
     res.status(201).json(newMessage);
   } catch (error) {

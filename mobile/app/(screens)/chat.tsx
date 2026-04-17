@@ -28,52 +28,56 @@ export default function ChatScreen() {
   const [isSending, setIsSending] = useState(false);
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !userId || !currentUserId) return;
+  if (!newMessage.trim() || !userId || !currentUserId) return;
 
-    setIsSending(true);
+  setIsSending(true);
 
-    try {
-      const token = await getToken();
+  try {
+    const token = await getToken();
 
-      const res = await fetch(`${API_CONFIG.baseUrl}/api/messages`, {
+    const res = await fetch(
+      `${API_CONFIG.apiUrl}/messages/send/${userId}`, // ✅ FIXED ROUTE
+      {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          receiverId: userId,
-          content: newMessage.trim(),
+          content: newMessage.trim(), // ✅ FIXED (not receiverId)
         }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Failed to send message");
       }
+    );
 
-      setNewMessage("");
+    const data = await res.json();
 
-      // ✅ Redirect + add to messages list
-      router.push({
-        pathname: "/(tabs)/messages",
-        params: {
-          newUser: JSON.stringify({
-            id: userId,
-            name: userName,
-            username: userName,
-            avatar: userAvatar,
-            verified: false,
-          }),
-        },
-      });
+    console.log("SEND RESPONSE:", data);
 
-    } catch (err) {
-      console.error("Send message error:", err);
-    } finally {
-      setIsSending(false);
+    if (!res.ok) {
+      throw new Error(data.message || "Failed to send");
     }
-  };
+
+    setNewMessage("");
+
+    router.push({
+      pathname: "/(tabs)/messages",
+      params: {
+        newUser: JSON.stringify({
+          id: userId,
+          name: userName,
+          username: userName,
+          avatar: userAvatar,
+          verified: false,
+        }),
+      },
+    });
+
+  } catch (err) {
+    console.error("Send message error:", err);
+  } finally {
+    setIsSending(false);
+  }
+};
 
   return (
     <SafeAreaView className="flex-1 bg-white">
