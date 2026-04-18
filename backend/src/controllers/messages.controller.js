@@ -20,13 +20,13 @@ export const getMessagesByUserId = async (req, res) => {
     const myId = req.user._id;
     const { id: userToChatId } = req.params;
 
-    const messages = await Message.find({
-      $or: [
-        { senderId: myId, receiverId: userToChatId },
-        { senderId: userToChatId, receiverId: myId },
-      ],
-    }).sort({ createdAt: 1 });   // good to sort messages by time
+    const conversationId = [myId.toString(), userToChatId.toString()]
+      .sort()
+      .join("_");
 
+    const messages = await Message.find({ conversationId })
+      .sort({ createdAt: 1 });
+      
     res.status(200).json(messages);
   } catch (error) {
     console.error("Error in getMessagesByUserId:", error);
@@ -36,42 +36,59 @@ export const getMessagesByUserId = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
   try {
-    console.log("📥 BODY:", req.body);
-    console.log("📥 PARAMS:", req.params);
-    console.log("👤 USER:", req.user);
-
     const { content, image } = req.body;
     const { id: receiverId } = req.params;
-    const senderId = req.user?._id;
-
-    if (!senderId) {
-      console.log("❌ NO USER ID");
-      return res.status(401).json({ message: "Unauthorized - no user" });
-    }
+    const senderId = req.user._id;   // Clerk userId (make sure it's attached correctly)
 
     if (!content && !image) {
-      console.log("❌ NO CONTENT");
-      return res.status(400).json({ message: "Content required" });
+      return res.status(400).json({ message: "Text or image is required." });
     }
 
-    const conversationId = [senderId.toString(), receiverId].sort().join("_");
+    if (senderId.toString() === receiverId) {
+      return res.status(400).json({ message: "Cannot send message to yourself." });
+    }
 
-    const newMessage = await Message.create({
+    // Check if receiver exists
+    const receiverExists = await User.exists({ _id: receiverId });
+    if (!receiverExists) {
+      return res.status(404).json({ message: "Receiver not found." });
+    }
+
+    let imageUrl = null;
+
+    // Upload image to Cloudinary if provided
+    if (image) {
+      try {
+        const uploadResponse = await cloudinary.uploader.upload(image, {
+          folder: "chat_images",        // optional: organize images in Cloudinary
+        });
+        imageUrl = uploadResponse.secure_url;
+      } catch (uploadError) {
+        console.error("Cloudinary upload error:", uploadError);
+        return res.status(500).json({ message: "Image upload failed" });
+      }
+    }
+
+    const conversationId = [senderId.toString(), receiverId.toString()]
+  .sort()
+  .join("_");
+
+    const newMessage = new Message({
       conversationId,
       senderId,
       receiverId,
-      content,
+      content: content || "",
     });
+    await newMessage.save();
 
-    console.log("✅ MESSAGE CREATED:", newMessage);
-
-    io.to(conversationId).emit("newMessage", newMessage);
+    // Emit to both users using room (more reliable than single socket)
+    const roomId = [senderId.toString(), receiverId.toString()].sort().join("_");
+    io.to(roomId).emit("newMessage", newMessage);
 
     res.status(201).json(newMessage);
-
   } catch (error) {
-    console.error("❌ SEND ERROR:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Error in sendMessage:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 

@@ -17,16 +17,17 @@ import { useAuth } from "@clerk/expo";
 /* ===================== TYPES ===================== */
 
 interface User {
-  id: string;
-  name: string;
+  _id: string;
   username: string;
   profilePicture: string;
+  name?: string;
   verified?: boolean;
   bio?: string;
 }
 
 interface PostData {
-  id: string;
+  _id?: string;
+  id?: string;
   text: string;
   createdAt: string;
   author: User;
@@ -37,12 +38,9 @@ interface SearchResultItem {
   data: User | PostData;
 }
 
-/* ===================== API CALL ===================== */
+/* ===================== API ===================== */
 
-// app/(tabs)/search.tsx - Update the fetchSearchResultsFromDB function
-
-// At the top of the file
-const API_BASE_URL = 'https://boomer-k9z3.onrender.com'; // Replace with your Render URL
+const API_BASE_URL = "https://boomer-k9z3.onrender.com";
 
 const fetchSearchResultsFromDB = async (
   query: string,
@@ -52,7 +50,7 @@ const fetchSearchResultsFromDB = async (
     const headers: any = {
       "Content-Type": "application/json",
     };
-    
+
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
@@ -62,20 +60,18 @@ const fetchSearchResultsFromDB = async (
       { headers }
     );
 
-    if (!res.ok) {
-      return [];
-    }
+    if (!res.ok) return [];
 
     const data = await res.json();
     const results: SearchResultItem[] = [];
 
-    if (data.users && Array.isArray(data.users)) {
+    if (Array.isArray(data.users)) {
       data.users.forEach((user: User) => {
         results.push({ type: "user", data: user });
       });
     }
 
-    if (data.posts && Array.isArray(data.posts)) {
+    if (Array.isArray(data.posts)) {
       data.posts.forEach((post: PostData) => {
         results.push({ type: "post", data: post });
       });
@@ -88,60 +84,11 @@ const fetchSearchResultsFromDB = async (
   }
 };
 
-// Mock data for testing when API fails
-const getMockSearchResults = (query: string): SearchResultItem[] => {
-  const mockUsers: User[] = [
-    {
-      id: "1",
-      name: "John Doe",
-      username: "johndoe",
-      profilePicture: "https://randomuser.me/api/portraits/men/1.jpg",
-      verified: true,
-      bio: "Software engineer",
-    },
-    {
-      id: "2",
-      name: "Jane Smith",
-      username: "janesmith",
-      profilePicture: "https://randomuser.me/api/portraits/women/1.jpg",
-      verified: false,
-      bio: "Product designer",
-    },
-  ];
-
-  const mockPosts: PostData[] = [
-    {
-      id: "1",
-      text: `Check out this amazing post about ${query}!`,
-      createdAt: new Date().toISOString(),
-      author: mockUsers[0],
-    },
-  ];
-
-  const results: SearchResultItem[] = [];
-  
-  // Add mock users
-  mockUsers.forEach(user => {
-    if (user.name.toLowerCase().includes(query.toLowerCase()) || 
-        user.username.toLowerCase().includes(query.toLowerCase())) {
-      results.push({ type: "user", data: user });
-    }
-  });
-  
-  // Add mock posts
-  mockPosts.forEach(post => {
-    if (post.text.toLowerCase().includes(query.toLowerCase())) {
-      results.push({ type: "post", data: post });
-    }
-  });
-  
-  return results;
-};
-
 /* ===================== COMPONENT ===================== */
 
 const SearchScreen = () => {
   const { getToken } = useAuth();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
@@ -160,10 +107,7 @@ const SearchScreen = () => {
   };
 
   const saveRecentSearch = async (query: string) => {
-    const updated = [query, ...recentSearches.filter((q) => q !== query)].slice(
-      0,
-      10
-    );
+    const updated = [query, ...recentSearches.filter((q) => q !== query)].slice(0, 10);
     setRecentSearches(updated);
     await AsyncStorage.setItem("recentSearches", JSON.stringify(updated));
   };
@@ -201,14 +145,16 @@ const SearchScreen = () => {
     }, 400);
   };
 
-  const startConversation = async (userId: string, userName: string, userAvatar: string) => {
+  const startConversation = (userId: string, userName: string, userAvatar: string) => {
+    console.log("🚀 Starting chat with:", { userId, userName });
+
     router.push({
       pathname: "/(screens)/chat",
-      params: { 
-        userId: userId,
-        userName: userName,
-        userAvatar: userAvatar 
-      }
+      params: {
+        userId,
+        userName,
+        userAvatar,
+      },
     });
   };
 
@@ -237,22 +183,22 @@ const SearchScreen = () => {
     const post = !isUser ? (item.data as PostData) : null;
 
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         className="flex-row py-3 border-b border-gray-100 px-4"
+        activeOpacity={0.7}
         onPress={() => {
           if (isUser) {
             router.push({
               pathname: "/(screens)/view-user",
-              params: { id: user.id }
+              params: { id: user._id },
             });
           } else if (post) {
             router.push({
               pathname: "/(screens)/view-post",
-              params: { id: post.id }
+              params: { id: post._id ?? post.id },
             });
           }
         }}
-        activeOpacity={0.7}
       >
         <Image
           source={{
@@ -263,11 +209,22 @@ const SearchScreen = () => {
 
         <View className="ml-3 flex-1">
           <View className="flex-row items-center flex-wrap">
-            <Text className="font-bold text-gray-900">{user.name}</Text>
+            <Text className="font-bold text-gray-900">
+              {user.name ?? user.username ?? "User"}
+            </Text>
+
             {user.verified && (
-              <Feather name="check-circle" size={16} color="#1DA1F2" className="ml-1" />
+              <Feather
+                name="check-circle"
+                size={16}
+                color="#1DA1F2"
+                className="ml-1"
+              />
             )}
-            <Text className="ml-1 text-gray-500">@{user.username}</Text>
+
+            <Text className="ml-1 text-gray-500">
+              @{user.username ?? "unknown"}
+            </Text>
           </View>
 
           {post && (
@@ -283,18 +240,27 @@ const SearchScreen = () => {
 
           {isUser && (
             <View className="flex-row mt-2">
-              <TouchableOpacity 
+              <TouchableOpacity
                 className="bg-blue-500 px-3 py-1 rounded-full mr-2"
-                onPress={() => router.push({
-                  pathname: "/(screens)/view-user",
-                  params: { id: user.id }
-                })}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(screens)/view-user",
+                    params: { id: user._id },
+                  })
+                }
               >
                 <Text className="text-white text-xs">View Profile</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 className="border border-blue-500 px-3 py-1 rounded-full"
-                onPress={() => startConversation(user.id, user.name, user.profilePicture)}
+                onPress={() =>
+                  startConversation(
+                    user._id,
+                    user.name ?? user.username ?? "User",
+                    user.profilePicture ?? ""
+                  )
+                }
               >
                 <Text className="text-blue-500 text-xs">Message</Text>
               </TouchableOpacity>
@@ -343,8 +309,9 @@ const SearchScreen = () => {
               <ResultItem
                 key={
                   item.type === "user"
-                    ? `user-${(item.data as User).id}-${index}`
-                    : `post-${(item.data as PostData).id}-${index}`
+                    ? `user-${(item.data as User)._id}-${index}`
+                    : `post-${((item.data as PostData)._id ??
+                        (item.data as PostData).id)}-${index}`
                 }
                 item={item}
               />
@@ -368,10 +335,12 @@ const SearchScreen = () => {
           <View className="p-4">
             <View className="flex-row justify-between items-center mb-4">
               <Text className="text-xl font-bold">Recent searches</Text>
-              <TouchableOpacity onPress={() => {
-                AsyncStorage.removeItem("recentSearches");
-                setRecentSearches([]);
-              }}>
+              <TouchableOpacity
+                onPress={() => {
+                  AsyncStorage.removeItem("recentSearches");
+                  setRecentSearches([]);
+                }}
+              >
                 <Text className="text-blue-500">Clear all</Text>
               </TouchableOpacity>
             </View>

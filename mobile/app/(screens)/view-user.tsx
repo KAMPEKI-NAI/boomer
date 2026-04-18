@@ -1,191 +1,363 @@
-import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { useState, useEffect } from "react";
-import { useLocalSearchParams, router } from "expo-router";
+import {
+  View,
+  TextInput,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  Image,
+  Alert,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useState, useEffect, useRef } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
 import { useAuth } from "@clerk/expo";
-import { API_CONFIG } from "@/config/api.config";
 
-interface UserProfile {
-  id: string;
-  name: string;
+/* ===================== TYPES ===================== */
+
+interface User {
+  _id: string;
   username: string;
   profilePicture: string;
-  bannerImage?: string;
-  bio: string;
-  followers: number;
-  following: number;
-  posts: number;
-  verified: boolean;
-  location?: string;
-  createdAt: string;
+  name?: string;
+  verified?: boolean;
+  bio?: string;
 }
 
-export default function ViewUserScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+interface PostData {
+  _id?: string;
+  id?: string;
+  text: string;
+  createdAt: string;
+  author: User;
+}
+
+interface SearchResultItem {
+  type: "user" | "post";
+  data: User | PostData;
+}
+
+/* ===================== API ===================== */
+
+const API_BASE_URL = "https://boomer-k9z3.onrender.com";
+
+const fetchSearchResultsFromDB = async (
+  query: string,
+  token?: string | null
+): Promise<SearchResultItem[]> => {
+  try {
+    const headers: any = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(
+      `${API_BASE_URL}/api/search?q=${encodeURIComponent(query)}`,
+      { headers }
+    );
+
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const results: SearchResultItem[] = [];
+
+    if (Array.isArray(data.users)) {
+      data.users.forEach((user: User) => {
+        results.push({ type: "user", data: user });
+      });
+    }
+
+    if (Array.isArray(data.posts)) {
+      data.posts.forEach((post: PostData) => {
+        results.push({ type: "post", data: post });
+      });
+    }
+
+    return results;
+  } catch (error) {
+    console.error("Search error:", error);
+    return [];
+  }
+};
+
+/* ===================== COMPONENT ===================== */
+
+const SearchScreen = () => {
   const { getToken } = useAuth();
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isFollowing, setIsFollowing] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (id) {
-      fetchUserProfile();
-    }
-  }, [id]);
+    loadRecentSearches();
+  }, []);
 
-  const fetchUserProfile = async () => {
-    try {
-      const token = await getToken();
-      const response = await fetch(
-        `${API_CONFIG.apiUrl}/users/by-id/${id}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const data = await response.json();
-      setUser(data);
-      setIsFollowing(data.isFollowing || false);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-    } finally {
-      setLoading(false);
-    }
+  const loadRecentSearches = async () => {
+    const stored = await AsyncStorage.getItem("recentSearches");
+    setRecentSearches(stored ? JSON.parse(stored) : []);
   };
 
-  const followUser = async () => {
-    try {
-      const token = await getToken();
-      const response = await fetch(
-        `${API_CONFIG.apiUrl}/users/follow/${id}`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (response.ok) {
-        setIsFollowing(!isFollowing);
-        setUser(prev => prev ? {
-          ...prev,
-          followers: isFollowing ? prev.followers - 1 : prev.followers + 1
-        } : null);
-      }
-    } catch (error) {
-      console.error("Error following user:", error);
-    }
+  const saveRecentSearch = async (query: string) => {
+    const updated = [query, ...recentSearches.filter((q) => q !== query)].slice(0, 10);
+    setRecentSearches(updated);
+    await AsyncStorage.setItem("recentSearches", JSON.stringify(updated));
   };
 
-  const startConversation = () => {
-    if (!user) return;
+  const deleteRecentSearch = async (query: string) => {
+    const updated = recentSearches.filter((q) => q !== query);
+    setRecentSearches(updated);
+    await AsyncStorage.setItem("recentSearches", JSON.stringify(updated));
+  };
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setHasSearched(false);
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(async () => {
+      if (!query.trim()) return;
+
+      setIsLoading(true);
+      setHasSearched(true);
+
+      saveRecentSearch(query);
+
+      const token = await getToken();
+      const results = await fetchSearchResultsFromDB(query, token);
+      setSearchResults(results);
+
+      setIsLoading(false);
+    }, 400);
+  };
+
+  const startConversation = (userId: string, userName: string, userAvatar: string) => {
+    console.log("🚀 Starting chat with:", { userId, userName });
+
     router.push({
       pathname: "/(screens)/chat",
-      params: { 
-        userId: user.id,
-        userName: user.name,
-        userAvatar: user.profilePicture
-      }
+      params: {
+        userId,
+        userName,
+        userAvatar,
+      },
     });
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView className="flex-1 bg-white justify-center items-center">
-        <ActivityIndicator size="large" color="#1DA1F2" />
-      </SafeAreaView>
-    );
-  }
+  const TopicItem = ({
+    text,
+    onPress,
+    onDelete,
+  }: {
+    text: string;
+    onPress: () => void;
+    onDelete: () => void;
+  }) => (
+    <View className="flex-row justify-between items-center py-3 border-b border-gray-100">
+      <TouchableOpacity onPress={onPress} className="flex-1">
+        <Text className="font-bold text-gray-900 text-lg">{text}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={onDelete}>
+        <Feather name="x-circle" size={18} color="#94a3b8" />
+      </TouchableOpacity>
+    </View>
+  );
 
-  if (!user) {
+  const ResultItem = ({ item }: { item: SearchResultItem }) => {
+    const isUser = item.type === "user";
+    const user = isUser ? (item.data as User) : (item.data as PostData).author;
+    const post = !isUser ? (item.data as PostData) : null;
+
     return (
-      <SafeAreaView className="flex-1 bg-white justify-center items-center">
-        <Text>User not found</Text>
-      </SafeAreaView>
+      <TouchableOpacity
+        className="flex-row py-3 border-b border-gray-100 px-4"
+        activeOpacity={0.7}
+        onPress={() => {
+          if (isUser) {
+            router.push({
+              pathname: "/(screens)/view-user",
+              params: { id: user._id },
+            });
+          } else if (post) {
+            router.push({
+              pathname: "/(screens)/view-post",
+              params: { id: post._id ?? post.id },
+            });
+          }
+        }}
+      >
+        <Image
+          source={{
+            uri: user.profilePicture || "https://via.placeholder.com/150",
+          }}
+          className="w-12 h-12 rounded-full"
+        />
+
+        <View className="ml-3 flex-1">
+          <View className="flex-row items-center flex-wrap">
+            <Text className="font-bold text-gray-900">
+              {user.name ?? user.username ?? "User"}
+            </Text>
+
+            {user.verified && (
+              <Feather
+                name="check-circle"
+                size={16}
+                color="#1DA1F2"
+                className="ml-1"
+              />
+            )}
+
+            <Text className="ml-1 text-gray-500">
+              @{user.username ?? "unknown"}
+            </Text>
+          </View>
+
+          {post && (
+            <>
+              <Text className="text-gray-900 mt-1" numberOfLines={2}>
+                {post.text}
+              </Text>
+              <Text className="text-gray-500 text-sm mt-1">
+                {new Date(post.createdAt).toLocaleString()}
+              </Text>
+            </>
+          )}
+
+          {isUser && (
+            <View className="flex-row mt-2">
+              <TouchableOpacity
+                className="bg-blue-500 px-3 py-1 rounded-full mr-2"
+                onPress={() =>
+                  router.push({
+                    pathname: "/(screens)/view-user",
+                    params: { id: user._id },
+                  })
+                }
+              >
+                <Text className="text-white text-xs">View Profile</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="border border-blue-500 px-3 py-1 rounded-full"
+                onPress={() =>
+                  startConversation(
+                    user._id,
+                    user.name ?? user.username ?? "User",
+                    user.profilePicture ?? ""
+                  )
+                }
+              >
+                <Text className="text-blue-500 text-xs">Message</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
     );
-  }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <View className="flex-row items-center px-4 py-3 border-b border-gray-100">
-        <TouchableOpacity onPress={() => router.back()} className="mr-4">
-          <Feather name="arrow-left" size={24} color="#1DA1F2" />
-        </TouchableOpacity>
-        <Text className="text-xl font-bold text-gray-900">{user.name}</Text>
+      <View className="px-4 py-3 border-b border-gray-100">
+        <View className="flex-row items-center bg-gray-100 rounded-full px-4 py-3">
+          <Feather name="search" size={20} color="#657786" />
+          <TextInput
+            placeholder="Search users and posts..."
+            className="flex-1 ml-3 text-base"
+            value={searchQuery}
+            onChangeText={handleSearch}
+            returnKeyType="search"
+            autoCapitalize="none"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={clearSearch}>
+              <Feather name="x" size={20} color="#657786" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Image
-          source={{ uri: user.bannerImage || "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=400&fit=crop" }}
-          className="w-full h-48"
-          resizeMode="cover"
-        />
-
-        <View className="px-4 pb-4">
-          <View className="flex-row justify-between items-end -mt-16 mb-4">
-            <Image
-              source={{ uri: user.profilePicture || "https://via.placeholder.com/150" }}
-              className="w-32 h-32 rounded-full border-4 border-white"
-            />
-            <View className="flex-row gap-2">
-              <TouchableOpacity
-                className={`border px-6 py-2 rounded-full ${isFollowing ? 'border-gray-300' : 'border-blue-500 bg-blue-500'}`}
-                onPress={followUser}
-              >
-                <Text className={`font-semibold ${isFollowing ? 'text-gray-900' : 'text-white'}`}>
-                  {isFollowing ? "Following" : "Follow"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="border border-blue-500 px-6 py-2 rounded-full flex-row items-center"
-                onPress={startConversation}
-              >
-                <Feather name="message-circle" size={16} color="#1DA1F2" />
-                <Text className="font-semibold text-blue-500 ml-1">Message</Text>
-              </TouchableOpacity>
-            </View>
+        {isLoading && (
+          <View className="p-4">
+            <Text className="text-center text-gray-500">Searching...</Text>
           </View>
+        )}
 
-          <View className="mb-4">
-            <View className="flex-row items-center mb-1">
-              <Text className="text-xl font-bold text-gray-900 mr-1">{user.name}</Text>
-              {user.verified && <Feather name="check-circle" size={20} color="#1DA1F2" />}
-            </View>
-            <Text className="text-gray-500 mb-2">@{user.username}</Text>
-            <Text className="text-gray-900 mb-3">{user.bio}</Text>
+        {!isLoading && searchResults.length > 0 && (
+          <View className="p-4">
+            <Text className="text-xl font-bold mb-4">
+              {`Results for "${searchQuery}"`}
+            </Text>
 
-            {user.location && (
-              <View className="flex-row items-center mb-2">
-                <Feather name="map-pin" size={16} color="#657786" />
-                <Text className="text-gray-500 ml-2">{user.location}</Text>
-              </View>
-            )}
-
-            <View className="flex-row items-center mb-3">
-              <Feather name="calendar" size={16} color="#657786" />
-              <Text className="text-gray-500 ml-2">
-                Joined {new Date(user.createdAt).toLocaleDateString()}
-              </Text>
-            </View>
-
-            <View className="flex-row gap-6">
-              <TouchableOpacity>
-                <Text className="text-gray-900">
-                  <Text className="font-bold">{user.posts}</Text> <Text className="text-gray-500">Posts</Text>
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity>
-                <Text className="text-gray-900">
-                  <Text className="font-bold">{user.followers}</Text> <Text className="text-gray-500">Followers</Text>
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity>
-                <Text className="text-gray-900">
-                  <Text className="font-bold">{user.following}</Text> <Text className="text-gray-500">Following</Text>
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {searchResults.map((item, index) => (
+              <ResultItem
+                key={
+                  item.type === "user"
+                    ? `user-${(item.data as User)._id}-${index}`
+                    : `post-${((item.data as PostData)._id ??
+                        (item.data as PostData).id)}-${index}`
+                }
+                item={item}
+              />
+            ))}
           </View>
-        </View>
+        )}
+
+        {!isLoading && hasSearched && searchResults.length === 0 && (
+          <View className="items-center justify-center py-20">
+            <Feather name="search" size={64} color="#D1D5DB" />
+            <Text className="text-center text-gray-500 mt-4">
+              {`No results for "${searchQuery}"`}
+            </Text>
+            <Text className="text-center text-gray-400 text-sm mt-2">
+              Try searching for something else
+            </Text>
+          </View>
+        )}
+
+        {!hasSearched && recentSearches.length > 0 && (
+          <View className="p-4">
+            <View className="flex-row justify-between items-center mb-4">
+              <Text className="text-xl font-bold">Recent searches</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  AsyncStorage.removeItem("recentSearches");
+                  setRecentSearches([]);
+                }}
+              >
+                <Text className="text-blue-500">Clear all</Text>
+              </TouchableOpacity>
+            </View>
+
+            {recentSearches.map((item, index) => (
+              <TopicItem
+                key={`recent-${item}-${index}`}
+                text={item}
+                onPress={() => handleSearch(item)}
+                onDelete={() => deleteRecentSearch(item)}
+              />
+            ))}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
-}
+};
+
+export default SearchScreen;
