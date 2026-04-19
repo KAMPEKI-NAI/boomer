@@ -41,19 +41,19 @@ export default function ChatScreen() {
 
   const flatListRef = useRef<FlatList>(null);
 
-  // Debug info
   useEffect(() => {
     console.log("📍 Current Path:", pathname);
     console.log("📍 Params Received:", params);
     console.log("📍 Extracted userId:", userId);
   }, [pathname, params]);
 
-  // Fetch messages when userId changes
   useEffect(() => {
     if (userId && currentUserId) {
       fetchMessages();
     }
   }, [userId]);
+
+  /* ================= FETCH MESSAGES ================= */
 
   const fetchMessages = async () => {
     try {
@@ -62,25 +62,31 @@ export default function ChatScreen() {
       const res = await fetch(
         `${API_CONFIG.apiUrl}/messages/${userId}`, // ✅ FIXED
         {
+          method: "GET", // ✅ FIXED
           headers: {
             Authorization: `Bearer ${token}`,
           },
         }
       );
 
-      const text = await res.text();
+      const data = await res.json();
 
       console.log("📥 STATUS:", res.status);
-      console.log("📥 RAW:", text);
+      console.log("📥 DATA:", data);
 
       if (!res.ok) {
-        throw new Error("Failed to load messages");
+        throw new Error(data.message || "Failed to load messages");
       }
 
-      const data = JSON.parse(text);
+      // ✅ MAP BACKEND → FRONTEND
+      const formatted = data.map((msg: any) => ({
+        id: msg._id,
+        text: msg.content,
+        senderId: msg.senderId,
+        createdAt: msg.createdAt,
+      }));
 
-      setMessages(data);
-
+      setMessages(formatted);
     } catch (error) {
       console.error("❌ Failed to fetch messages:", error);
     } finally {
@@ -88,18 +94,22 @@ export default function ChatScreen() {
     }
   };
 
+  /* ================= SEND MESSAGE ================= */
+
   const sendMessage = async () => {
     if (!newMessage.trim() || !userId || !currentUserId) return;
 
+    const messageText = newMessage.trim(); // ✅ FIXED
+
     const tempMessage: Message = {
       id: `temp-${Date.now()}`,
-      text: newMessage.trim(),
+      text: messageText,
       senderId: currentUserId,
       createdAt: new Date().toISOString(),
     };
 
+    // Optimistic UI
     setMessages((prev) => [...prev, tempMessage]);
-    const messageText = newMessage.trim();
     setNewMessage("");
     Keyboard.dismiss();
 
@@ -107,30 +117,52 @@ export default function ChatScreen() {
 
     try {
       const token = await getToken();
-      const res = await fetch(`${API_CONFIG.apiUrl}/messages/send/${userId}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ 
-          content: newMessage.trim() 
-        }),
-      });
 
-      if (!res.ok) throw new Error();
+      const res = await fetch(
+        `${API_CONFIG.apiUrl}/messages/${userId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            content: messageText, // ✅ FIXED
+          }),
+        }
+      );
 
-      const savedMsg = await res.json();
+      const data = await res.json();
+
+      console.log("📤 SEND STATUS:", res.status);
+      console.log("📤 SEND DATA:", data);
+
+      if (!res.ok) {
+        throw new Error(data.message || "Send failed");
+      }
+
+      // Replace temp message with real one
+      const formatted = {
+        id: data._id,
+        text: data.content,
+        senderId: data.senderId,
+        createdAt: data.createdAt,
+      };
+
       setMessages((prev) =>
-        prev.map((m) => (m.id === tempMessage.id ? savedMsg : m))
+        prev.map((m) => (m.id === tempMessage.id ? formatted : m))
       );
     } catch (err) {
-      console.error("Send failed:", err);
+      console.error("❌ Send failed:", err);
+
+      // Remove failed message
       setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
     } finally {
       setIsSending(false);
     }
   };
+
+  /* ================= RENDER ================= */
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isMine = item.senderId === currentUserId;
@@ -143,9 +175,19 @@ export default function ChatScreen() {
             : "bg-gray-200 self-start rounded-bl-none"
         }`}
       >
-        <Text className={isMine ? "text-white" : "text-gray-900"}>{item.text}</Text>
-        <Text className={`text-[10px] mt-1 ${isMine ? "text-blue-100" : "text-gray-500"}`}>
-          {new Date(item.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        <Text className={isMine ? "text-white" : "text-gray-900"}>
+          {item.text}
+        </Text>
+
+        <Text
+          className={`text-[10px] mt-1 ${
+            isMine ? "text-blue-100" : "text-gray-500"
+          }`}
+        >
+          {new Date(item.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
         </Text>
       </View>
     );
@@ -153,7 +195,7 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      {/* Header */}
+      {/* HEADER */}
       <View className="flex-row items-center px-4 py-3 border-b border-gray-100">
         <TouchableOpacity onPress={() => router.back()} className="mr-3">
           <Feather name="arrow-left" size={24} color="#1DA1F2" />
@@ -165,12 +207,14 @@ export default function ChatScreen() {
         />
 
         <View className="flex-1">
-          <Text className="font-semibold text-lg text-gray-900">{userName}</Text>
+          <Text className="font-semibold text-lg text-gray-900">
+            {userName}
+          </Text>
           <Text className="text-xs text-gray-500">Active now</Text>
         </View>
       </View>
 
-      {/* Messages */}
+      {/* MESSAGES */}
       <View className="flex-1 bg-gray-50">
         {loading ? (
           <View className="flex-1 items-center justify-center">
@@ -180,7 +224,7 @@ export default function ChatScreen() {
           <View className="flex-1 items-center justify-center px-6">
             <Feather name="message-circle" size={80} color="#E5E7EB" />
             <Text className="text-gray-400 text-center mt-6 text-lg">
-              No messages yet.{'\n'}Send a message to start chatting!
+              No messages yet.{"\n"}Send a message to start chatting!
             </Text>
           </View>
         ) : (
@@ -195,7 +239,7 @@ export default function ChatScreen() {
         )}
       </View>
 
-      {/* Input Area */}
+      {/* INPUT */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 30}
@@ -216,7 +260,9 @@ export default function ChatScreen() {
             onPress={sendMessage}
             disabled={isSending || !newMessage.trim() || !userId}
             className={`w-11 h-11 rounded-full items-center justify-center ${
-              !newMessage.trim() || !userId ? "bg-gray-300" : "bg-blue-500"
+              !newMessage.trim() || !userId
+                ? "bg-gray-300"
+                : "bg-blue-500"
             }`}
           >
             {isSending ? (
